@@ -1,0 +1,17 @@
+# 既定は LF（webOS / chroot 上の /bin/sh と Python が CRLF で誤動作するため）
+* text=auto eol=lf
+
+# 実行スクリプトは必ず LF
+*.sh     text eol=lf
+*.py     text eol=lf
+*.js     text eol=lf
+*.css    text eol=lf
+*.html   text eol=lf
+*.json   text eol=lf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# バイナリ
+*.png    binary
+*.woff2  binary
+*.ipk    binary
