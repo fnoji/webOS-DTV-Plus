@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, user-scalable=no">
+  <title>DTV 実況オーバーレイ</title>
+  <style>
+    * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 1920px; height: 1080px;
+      overflow: hidden;
+      background-color: transparent !important;
+      color: #ffffff;
+      font-family: "LG Smart UI", "Noto Sans CJK JP", sans-serif;
+    }
+    #danmaku-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1920px; height: 1080px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .jk-bullet {
+      position: absolute;
+      left: 0;
+      white-space: nowrap;
+      font-weight: bold;
+      line-height: 1.15;
+      text-shadow:
+        2px 2px 0 rgba(0, 0, 0, 0.95),
+        -2px -2px 0 rgba(0, 0, 0, 0.95),
+        2px -2px 0 rgba(0, 0, 0, 0.95),
+        -2px 2px 0 rgba(0, 0, 0, 0.95);
+      will-change: transform;
+    }
+    #hud {
+      position: absolute;
+      top: 32px; right: 42px;
+      background-color: rgba(18, 20, 25, 0.94);
+      border: 2px solid #3c424f;
+      border-left: 8px solid #cf0652;
+      border-radius: 12px;
+      padding: 18px 26px;
+      min-width: 460px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8);
+      -webkit-transition: opacity 0.25s ease;
+      transition: opacity 0.25s ease;
+    }
+    #hud.hidden { opacity: 0; pointer-events: none; }
+    .hud-title { font-size: 24px; font-weight: bold; color: #b8bec8; margin-bottom: 6px; }
+    .hud-ch { font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 10px; }
+    .hud-hint { font-size: 20px; color: #d5dbe3; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div id="danmaku-layer"></div>
+  <div id="hud">
+    <div class="hud-title">LG 純正LiveTV ニコニコ実況オーバーレイ (DTV Plus 設定同期)</div>
+    <div id="hud-ch" class="hud-ch">設定を読み込み中…</div>
+    <div class="hud-hint">
+      ◀ / ▶ または コロコロ : 実況CH切替 &nbsp;|&nbsp; ▲ / ▼ : 文字サイズ変更<br>
+      赤ボタン : 弾幕ON/OFF &nbsp;|&nbsp; 緑ボタン : 透過度変更 &nbsp;|&nbsp; 戻る : 終了
+    </div>
+  </div>
+
+  <script src="jikkyo.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      var channels = window.JikkyoModule.JIKKYO_CHANNELS;
+      var sizeKeys = ['small', 'medium', 'large', 'xlarge'];
+      var opacities = [0.25, 0.50, 0.70, 0.85, 1.0];
+      var currentIdx = 0;
+      var curSizeKey = 'medium';
+      var curOpacity = 0.85;
+      var lastWheel = 0;
+
+      var hud = document.getElementById('hud');
+      var hudCh = document.getElementById('hud-ch');
+      var hudTimer = null;
+      var statusStr = '';
+
+      var engine = new window.JikkyoModule.JikkyoEngine(document.getElementById('danmaku-layer'), {
+        onStatus: function (st) {
+          statusStr = st;
+          updateHudLabel();
+        }
+      });
+
+      function applyPrefsObject(p, allowSwitchChannel) {
+        if (!p) return;
+        if (p.fontSizeKey && sizeKeys.indexOf(p.fontSizeKey) !== -1 && p.fontSizeKey !== curSizeKey) {
+          curSizeKey = p.fontSizeKey;
+          engine.setFontSizeKey(curSizeKey);
+        }
+        if (typeof p.opacity === 'number' && Math.abs(p.opacity - curOpacity) > 0.01) {
+          curOpacity = p.opacity;
+          engine.setOpacity(curOpacity);
+        }
+        if (typeof p.enabled === 'boolean' && p.enabled !== engine.enabled) {
+          engine.setEnabled(p.enabled);
+        }
+        if (allowSwitchChannel && p.jkId) {
+          for (var i = 0; i < channels.length; i++) {
+            if (channels[i].id === p.jkId) {
+              currentIdx = i;
+              break;
+            }
+          }
+        }
+        updateHudLabel();
+      }
+
+      function persistToSharedDaemon() {
+        if (window.JikkyoModule.syncSharedPrefs) {
+          window.JikkyoModule.syncSharedPrefs({
+            enabled: engine.enabled,
+            fontSizeKey: curSizeKey,
+            opacity: curOpacity,
+            jkId: channels[currentIdx].id
+          });
+        }
+      }
+
+      function updateHudLabel() {
+        var ch = channels[currentIdx];
+        var preset = window.JikkyoModule.FONT_SIZE_PRESETS[curSizeKey] || window.JikkyoModule.FONT_SIZE_PRESETS.medium;
+        var op = Math.round(curOpacity * 100) + '%';
+        var onOff = engine.enabled ? '' : ' [OFF]';
+        hudCh.textContent = ch.name + ' (' + (statusStr || ch.id.toUpperCase()) + ')' + onOff + '  [' + preset.label + ' / ' + op + ']';
+      }
+
+      function showHud() {
+        updateHudLabel();
+        hud.className = '';
+        if (hudTimer) clearTimeout(hudTimer);
+        hudTimer = setTimeout(function () { hud.className = 'hidden'; }, 5500);
+      }
+
+      function selectIndex(idx) {
+        currentIdx = (idx + channels.length) % channels.length;
+        var ch = channels[currentIdx];
+        engine.connect(ch.id);
+        persistToSharedDaemon();
+        showHud();
+      }
+
+      // 1. まず launchParams があれば反映し、続けてデーモン (127.0.0.1:7019/api/prefs/jikkyo) から DTV Plus の最新設定を取得して適用
+      var hasLaunchJk = false;
+      try {
+        if (window.PalmSystem && window.PalmSystem.launchParams) {
+          var lp = JSON.parse(window.PalmSystem.launchParams);
+          if (lp && lp.jkId) hasLaunchJk = true;
+          applyPrefsObject(lp, true);
+        }
+      } catch (e) {}
+
+      window.JikkyoModule.fetchSharedPrefs(function (err, shared) {
+        if (!err && shared) {
+          applyPrefsObject(shared, !hasLaunchJk);
+        }
+        engine.setFontSizeKey(curSizeKey);
+        engine.setOpacity(curOpacity);
+        selectIndex(currentIdx);
+      });
+
+      // DTV Plus 側で後から設定変更された場合も自動追従 (5秒ポーリング)
+      setInterval(function () {
+        window.JikkyoModule.fetchSharedPrefs(function (err, shared) {
+          if (!err && shared) {
+            applyPrefsObject(shared, false);
+          }
+        });
+      }, 5000);
+
+      document.addEventListener('keydown', function (ev) {
+        var c = ev.keyCode;
+        if (c === 37) { ev.preventDefault(); selectIndex(currentIdx - 1); }
+        else if (c === 39) { ev.preventDefault(); selectIndex(currentIdx + 1); }
+        else if (c === 38) {
+          ev.preventDefault();
+          var si = Math.min(sizeKeys.length - 1, sizeKeys.indexOf(curSizeKey) + 1);
+          curSizeKey = sizeKeys[si];
+          engine.setFontSizeKey(curSizeKey);
+          persistToSharedDaemon();
+          showHud();
+        } else if (c === 40) {
+          ev.preventDefault();
+          var si2 = Math.max(0, sizeKeys.indexOf(curSizeKey) - 1);
+          curSizeKey = sizeKeys[si2];
+          engine.setFontSizeKey(curSizeKey);
+          persistToSharedDaemon();
+          showHud();
+        } else if (c === 403 || c === 82) {
+          ev.preventDefault();
+          engine.setEnabled(!engine.enabled);
+          persistToSharedDaemon();
+          showHud();
+        } else if (c === 404 || c === 71) {
+          ev.preventDefault();
+          var nextOp = opacities[0];
+          for (var i = 0; i < opacities.length; i++) {
+            if (Math.abs(opacities[i] - curOpacity) < 0.04) {
+              nextOp = opacities[(i + 1) % opacities.length];
+              break;
+            }
+          }
+          curOpacity = nextOp;
+          engine.setOpacity(curOpacity);
+          persistToSharedDaemon();
+          showHud();
+        } else if (c === 13) {
+          ev.preventDefault();
+          showHud();
+        } else if (c === 461 || c === 27 || c === 8) {
+          ev.preventDefault();
+          engine.disconnect();
+          window.close();
+          if (window.PalmSystem && window.PalmSystem.platformBack) {
+            window.PalmSystem.platformBack();
+          }
+        }
+      });
+
+      // Magicリモコンのコロコロで実況チャンネル切替
+      function onWheel(ev) {
+        var d = ev.wheelDelta ? -ev.wheelDelta : (ev.deltaY || 0);
+        if (!d) return;
+        ev.preventDefault();
+        var now = Date.now();
+        if (now - lastWheel < 300) return;
+        lastWheel = now;
+        selectIndex(currentIdx + (d < 0 ? 1 : -1));
+      }
+      window.addEventListener('mousewheel', onWheel, false);
+      window.addEventListener('wheel', onWheel, false);
+    })();
+  </script>
+</body>
+</html>

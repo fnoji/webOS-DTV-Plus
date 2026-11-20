@@ -1,0 +1,24 @@
+{
+  "id": "tv.dtvplus.webos.overlay",
+  "version": "1.0.0",
+  "vendor": "LG-DTV-Plus",
+  "type": "web",
+  "main": "index.html",
+  "title": "DTV 実況オーバーレイ",
+  "appDescription": "純正LiveTVの上にニコニコ実況コメントを透過重畳するオーバーレイ",
+  "icon": "icon80.png",
+  "largeIcon": "icon130.png",
+  "iconColor": "#cf0652",
+  "resolution": "1920x1080",
+  "defaultWindowType": "overlay",
+  "transparent": true,
+  "handlesRelaunch": true,
+  "disableBackHistoryAPI": true,
+  "noSplashOnLaunch": true,
+  "spinnerOnLaunch": false,
+  "privilegedJail": true,
+  "requiredPermissions": ["all"],
+  "vendorExtension": {
+    "allowCrossDomain": true
+  }
+}

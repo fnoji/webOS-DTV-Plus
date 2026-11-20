@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, user-scalable=no">
+  <title>DTV Plus</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- 1. ハードウェアデコード映像レイヤー & ARIB STD-B24 字幕/文字スーパーレイヤー (L字縮小連動) -->
+  <div id="video-container">
+    <video id="tv-video" autoplay playsinline></video>
+    <canvas id="caption-canvas" width="1920" height="1080"></canvas>
+    <canvas id="superimpose-canvas" width="1920" height="1080"></canvas>
+  </div>
+
+  <!-- 待機画面 -->
+  <div id="standby-placeholder">
+    <div class="standby-badge">LG webOS NATIVE TUNER CLIENT</div>
+    <div class="standby-logo">DTV Plus</div>
+    <div id="standby-msg" class="standby-msg">Mirakurun サーバーへ接続しています…</div>
+  </div>
+
+  <!-- 1b. ARIB BML データ放送オーバーレイレイヤー (web-bml) -->
+  <div id="bml-overlay" class="hidden">
+    <div id="bml-stage" class="bml-stage">
+      <div id="bml-content" class="bml-content-host"></div>
+    </div>
+    <div id="bml-input-overlay" class="bml-input-overlay" style="display:none;">
+      <div class="bml-input-title">データ放送 文字入力</div>
+      <div><input type="text" class="tver-input" style="width:100%; margin:10px 0;"></div>
+      <div class="bml-input-actions">
+        <button class="submit btn-action">確定</button>
+        <button class="cancel btn-action">キャンセル</button>
+      </div>
+    </div>
+    <div id="bml-status-badge" class="bml-status-badge" style="display:none;">データ取得中…</div>
+  </div>
+
+  <!-- 2. ニコニコ実況 GPU弾幕レイヤー -->
+  <div id="danmaku-layer"></div>
+
+  <!-- 3. LG純正風 リッチ通知カード -->
+  <div id="rich-toast" class="type-info">
+    <div id="toast-title" class="toast-title">通知</div>
+    <div id="toast-detail" class="toast-detail"></div>
+  </div>
+
+  <!-- 3b. LG純正 SimilarListISDB 準拠 チャンネル番号入力＆候補リスト (左上) -->
+  <div id="similar-list-box" class="hidden">
+    <div class="sim-input-header">
+      <span id="sim-band-badge" class="sim-band-badge">BS</span>
+      <span id="sim-digits" class="sim-digits">---</span>
+      <span id="sim-mode-hint" class="sim-mode-hint">3桁入力 / 候補選択</span>
+    </div>
+    <div id="sim-list-body" class="sim-list-body"></div>
+  </div>
+
+  <!-- 4. 下部 OSD 番組情報バナー -->
+  <div id="osd-banner">
+    <div class="osd-top-row">
+      <div class="osd-ch-wrap">
+        <span id="osd-remocon" class="osd-remocon-badge">1</span>
+        <img id="osd-logo" class="osd-ch-logo" alt="" style="display:none;">
+        <span id="osd-ch-name" class="osd-ch-name">チャンネル未選択</span>
+      </div>
+      <div class="osd-badges">
+        <span id="osd-rec-btn" class="pill-badge rec-btn">● 録画予約</span>
+        <span id="osd-mode-badge" class="pill-badge live">LIVE TS</span>
+        <span id="osd-sub-badge" class="pill-badge">字幕: OFF</span>
+        <span id="osd-audio-badge" class="pill-badge">音声: 主音声</span>
+        <span id="osd-jk-badge" class="pill-badge jk">実況: --</span>
+      </div>
+    </div>
+    <div id="osd-prog-title" class="osd-prog-title">番組情報を取得中…</div>
+    <div class="osd-time-row">
+      <span id="osd-time-text" class="osd-time-text">--:-- 〜 --:--</span>
+      <div class="osd-progress-track">
+        <div id="osd-progress-fill" class="osd-progress-fill"></div>
+      </div>
+    </div>
+    <div id="osd-desc" class="osd-desc"></div>
+    <div id="osd-next" class="osd-next"></div>
+  </div>
+
+  <!-- 5. 左側 DTV メインメニュー -->
+  <div id="left-drawer">
+    <div class="drawer-header">
+      <div class="brand-title">
+        <div class="brand-accent-bar"></div>
+        <div class="brand-text-col">
+          <span class="brand-main">DTV Plus</span>
+          <span id="brand-mode-sub" class="brand-sub">放送・配信・録画統合ビューワー</span>
+        </div>
+      </div>
+      <div id="header-clock" class="header-clock">--:--</div>
+    </div>
+
+    <div id="nav-tabs" class="nav-tabs"></div>
+    <div id="drawer-body"></div>
+  </div>
+
+  <!-- 6. 番組表オーバーレイ -->
+  <div id="epg-overlay" class="hidden">
+    <div class="epg-top-bar">
+      <div class="epg-title-wrap">
+        <div class="brand-accent-bar"></div>
+        <span class="epg-main-title">番組表</span>
+        <span id="epg-range-label" class="brand-sub">本日の番組</span>
+      </div>
+      <div id="epg-controls" class="epg-controls">
+        <button class="btn-action" data-epg-type="GR">地デジ</button>
+        <button class="btn-action" data-epg-type="BS">BS</button>
+        <button class="btn-action" data-epg-type="BS4K">BS4K</button>
+        <button class="btn-action" data-epg-type="CS">CS</button>
+        <button class="btn-action" data-epg-type="ABEMA">ABEMA</button>
+        <button class="btn-action" data-epg-shift="-24">◀前日</button>
+        <button class="btn-action" data-epg-shift="-3">◀-3h</button>
+        <button class="btn-action" data-epg-shift="0">現在</button>
+        <button class="btn-action" data-epg-shift="3">+3h▶</button>
+        <button class="btn-action" data-epg-shift="24">翌日▶</button>
+        <button class="btn-action" id="btn-epg-close">閉じる</button>
+      </div>
+    </div>
+    <div class="epg-header-row">
+      <div class="epg-time-corner">時刻</div>
+      <div id="epg-ch-headers"></div>
+    </div>
+    <div class="epg-viewport">
+      <div id="epg-time-axis"></div>
+      <div id="epg-grid-scroll">
+        <div id="epg-columns-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6b. 全画面 録画・保存ライブラリ (EPGStation 録画一覧 + TVer/ABEMA 保存管理) -->
+  <div id="recorded-overlay" class="hidden">
+    <div class="rec-top-bar">
+      <div class="rec-title-wrap">
+        <div class="brand-accent-bar" style="height:40px;"></div>
+        <span class="epg-main-title">録画・保存ライブラリ</span>
+        <span id="rec-count-label" class="brand-sub">読み込み中…</span>
+        <span id="rec-storage-badge" class="rec-storage-badge"></span>
+      </div>
+      <div id="rec-toolbar" class="rec-toolbar">
+        <button class="btn-action" data-rec-sort="date_desc">新しい順 ▼</button>
+        <button class="btn-action" data-rec-sort="date_asc">古い順 ▲</button>
+        <button class="btn-action" data-rec-sort="title_asc">番組名順</button>
+        <button class="btn-action" data-rec-sort="duration_desc">長さ順</button>
+        <button class="btn-action" data-rec-sort="resume_first">視聴途中優先</button>
+        <input id="rec-search-input" type="text" class="rec-search-input" placeholder="録画キーワード検索…">
+        <button class="btn-action" id="btn-rec-search">検索</button>
+        <button class="btn-action" id="btn-rec-reload">更新</button>
+        <button class="btn-action" id="btn-rec-close">閉じる</button>
+      </div>
+    </div>
+    <div class="rec-body-split">
+      <div id="rec-sidebar" class="rec-sidebar"></div>
+      <div class="rec-main-pane">
+        <div id="rec-main-list" class="rec-main-list"></div>
+        <div id="rec-pager-bar" class="rec-pager-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 番組詳細 & 録画・保存確認モーダル -->
+  <div id="modal-backdrop" class="hidden">
+    <div class="modal-card">
+      <div id="modal-sub" class="modal-sub"></div>
+      <div id="modal-title" class="modal-title"></div>
+      <div id="modal-body" class="modal-body"></div>
+      <div id="modal-actions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <!-- 8. 右側 リアルタイム実況コメントログ -->
+  <div id="right-comment-panel" class="closed">
+    <div class="comment-panel-hdr">
+      <span id="comment-panel-title" class="comment-panel-title">ニコニコ実況</span>
+      <span id="comment-force" class="comment-force">0 コメ/分</span>
+    </div>
+    <div id="comment-log-list"></div>
+  </div>
+
+  <!-- 9. 下部 リモコンガイドバー (折り返し完全防止 + データ放送連動ガイド切替) -->
+  <div id="bottom-guide-bar">
+    <div id="guide-normal-wrap" class="guide-bar-inner">
+      <div class="guide-group">
+        <div id="btn-guide-red" class="guide-btn">
+          <span class="color-dot dot-red"></span><span id="label-red">実況: ON</span>
+        </div>
+        <div id="btn-guide-green" class="guide-btn">
+          <span class="color-dot dot-green"></span><span id="label-green">音声: 主音声</span>
+        </div>
+        <div id="btn-guide-yellow" class="guide-btn">
+          <span class="color-dot dot-yellow"></span><span>コメント欄</span>
+        </div>
+        <div id="btn-guide-blue" class="guide-btn">
+          <span class="color-dot dot-blue"></span><span>メニュー</span>
+        </div>
+      </div>
+      <div class="guide-group">
+        <div class="guide-btn" id="btn-guide-3digit">
+          <span class="key-cap">0〜9</span><span>選局</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-sub">
+          <span class="key-cap">字幕</span><span id="label-sub">字幕: OFF</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-bml">
+          <span class="key-cap key-cap-bml">d</span><span>データ</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-epg">
+          <span class="key-cap">番組表</span><span>番組表</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-reclist">
+          <span class="key-cap">録画一覧</span><span>録画</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-rec">
+          <span id="keycap-rec" class="key-cap key-cap-rec">●録画</span><span id="label-rec">開始</span>
+        </div>
+        <div class="guide-btn" id="btn-guide-info">
+          <span class="key-cap">決定</span><span>情報</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="guide-bml-wrap" class="guide-bar-inner hidden">
+      <div class="guide-group">
+        <div id="btn-bml-blue" class="guide-btn">
+          <span class="color-dot dot-blue"></span><span>青</span>
+        </div>
+        <div id="btn-bml-red" class="guide-btn">
+          <span class="color-dot dot-red"></span><span>赤</span>
+        </div>
+        <div id="btn-bml-green" class="guide-btn">
+          <span class="color-dot dot-green"></span><span>緑</span>
+        </div>
+        <div id="btn-bml-yellow" class="guide-btn">
+          <span class="color-dot dot-yellow"></span><span>黄</span>
+        </div>
+      </div>
+      <div class="guide-group">
+        <div class="guide-btn">
+          <span class="key-cap">十字/決定</span><span>項目選択</span>
+        </div>
+        <div class="guide-btn" id="btn-bml-sub">
+          <span class="key-cap">字幕</span><span id="label-bml-sub">字幕: OFF</span>
+        </div>
+        <div class="guide-btn" id="btn-bml-back">
+          <span class="key-cap">戻る</span><span>前の画面</span>
+        </div>
+        <div class="guide-btn" id="btn-bml-close">
+          <span class="key-cap key-cap-bml">d</span><span>データ放送を閉じる</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/luna.js"></script>
+  <script src="js/jikkyo.js"></script>
+  <script src="js/mirakurun.js"></script>
+  <script src="js/epgstation.js"></script>
+  <script src="js/tver.js"></script>
+  <script src="js/arib_bundle.js"></script>
+  <script src="js/arib_manager.js"></script>
+  <script src="js/qrcode.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

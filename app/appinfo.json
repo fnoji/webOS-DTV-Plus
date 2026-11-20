@@ -1,0 +1,29 @@
+{
+  "id": "tv.dtvplus.webos",
+  "version": "1.0.0",
+  "vendor": "LG-DTV-Plus",
+  "type": "web",
+  "main": "index.html",
+  "title": "DTV Plus",
+  "appDescription": "Mirakurun / BS4K / EPG / TVer / ABEMA Client for LG webOS",
+  "icon": "icon80.png",
+  "largeIcon": "icon130.png",
+  "splashBackground": "splash.png",
+  "bgImage": "splash.png",
+  "iconColor": "#1c1e24",
+  "bgColor": "#101216",
+  "resolution": "1920x1080",
+  "transparent": false,
+  "handlesRelaunch": true,
+  "disableBackHistoryAPI": true,
+  "noSplashOnLaunch": false,
+  "spinnerOnLaunch": false,
+  "privilegedJail": true,
+  "requiredPermissions": ["all"],
+  "vendorExtension": {
+    "allowCrossDomain": true,
+    "enableKeyboard": true,
+    "resolution": "1920x1080",
+    "handleExitKey": false
+  }
+}

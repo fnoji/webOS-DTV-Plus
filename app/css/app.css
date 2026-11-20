@@ -1,0 +1,2296 @@
+/* -*- coding: utf-8 -*-
+ * app.css - LG webOS 純正 DTV アプリ基調テーマ & 55インチ大型タイポグラフィ
+ * フォーカス色: #cf0652 (LG Signature Magenta) / 背景: ダークスレートチャコール
+ * Chromium 53 (Blink 53) 完全互換: gap / grid / inset / @layer 不使用
+ */
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@font-face {
+  font-family: "丸ゴシック";
+  src: url("../fonts/KosugiMaru-Regular.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "丸ゴシック";
+  src: url("../fonts/KosugiMaru-Bold.woff2") format("woff2");
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "太丸ゴシック";
+  src: url("../fonts/KosugiMaru-Bold.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "角ゴシック";
+  src: url("../fonts/Kosugi-Regular.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background-color: #000000;
+  color: #ffffff;
+  font-family: "LG Smart UI", "LG Smart", "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+  font-size: 24px;
+}
+
+/* 1. ハードウェア動画レイヤー & ARIB 字幕/文字スーパーレイヤー */
+#video-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  background-color: #000000;
+  overflow: hidden;
+  z-index: 1;
+}
+
+#tv-video {
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  display: block;
+}
+
+#caption-canvas,
+#superimpose-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#caption-canvas {
+  z-index: 3;
+}
+
+#superimpose-canvas {
+  z-index: 4;
+}
+
+/* 1b. ARIB BML データ放送レイヤー */
+#bml-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  z-index: 6;
+}
+
+#bml-overlay.hidden {
+  display: none;
+}
+
+.bml-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 960px;
+  height: 540px;
+  -webkit-transform-origin: 0 0;
+  transform-origin: 0 0;
+  -webkit-transform: scale(2, 2);
+  transform: scale(2, 2);
+}
+
+.bml-content-host {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.bml-status-badge {
+  position: absolute;
+  right: 38px;
+  bottom: 92px;
+  background-color: rgba(16, 18, 24, 0.92);
+  border: 2px solid #cf0652;
+  color: #ffffff;
+  font-size: 23px;
+  font-weight: bold;
+  padding: 8px 22px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+  z-index: 15;
+}
+
+.bml-input-overlay {
+  position: absolute;
+  left: 560px;
+  top: 380px;
+  width: 800px;
+  background-color: rgba(20, 23, 30, 0.97);
+  border: 2px solid #cf0652;
+  border-radius: 12px;
+  padding: 24px 30px;
+  z-index: 20;
+  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.9);
+}
+
+.bml-input-title {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.bml-input-actions {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: flex-end;
+  justify-content: flex-end;
+}
+
+.bml-input-actions .btn-action {
+  margin-left: 12px;
+}
+
+/* 待機画面 */
+#standby-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #20242c 0%, #0d0f13 78%);
+  z-index: 2;
+}
+
+#standby-placeholder.hidden {
+  display: none;
+}
+
+.standby-badge {
+  background-color: #cf0652;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: bold;
+  padding: 6px 20px;
+  border-radius: 999px;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+  white-space: nowrap;
+}
+
+.standby-logo {
+  font-size: 56px;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 1px;
+  margin-bottom: 18px;
+}
+
+.standby-msg {
+  font-size: 28px;
+  color: #b8bec8;
+  max-width: 1280px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 2. ニコニコ実況 GPU弾幕レイヤー */
+#danmaku-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.jk-bullet {
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+  font-weight: bold;
+  line-height: 1.15;
+  text-shadow:
+    2px 2px 0 rgba(0, 0, 0, 0.95),
+    -2px -2px 0 rgba(0, 0, 0, 0.95),
+    2px -2px 0 rgba(0, 0, 0, 0.95),
+    -2px 2px 0 rgba(0, 0, 0, 0.95),
+    0 4px 10px rgba(0, 0, 0, 0.8);
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* 3. LG純正風 リッチ通知カード (右上) */
+#rich-toast {
+  position: absolute;
+  top: 34px;
+  right: 42px;
+  min-width: 480px;
+  max-width: 780px;
+  background-color: rgba(24, 27, 33, 0.96);
+  border: 2px solid #3c414c;
+  border-left: 8px solid #cf0652;
+  border-radius: 12px;
+  padding: 18px 26px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.78);
+  z-index: 80;
+  opacity: 0;
+  -webkit-transform: translate3d(0, -18px, 0);
+  transform: translate3d(0, -18px, 0);
+  -webkit-transition: opacity 0.22s ease, -webkit-transform 0.22s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+#rich-toast.visible {
+  opacity: 1;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
+#rich-toast.type-success { border-left-color: #10b981; }
+#rich-toast.type-warn    { border-left-color: #f59e0b; }
+#rich-toast.type-error   { border-left-color: #ef4444; }
+#rich-toast.type-info    { border-left-color: #cf0652; }
+
+.toast-title {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.toast-detail {
+  font-size: 22px;
+  color: #c5cbd4;
+  line-height: 1.4;
+}
+
+/* 3b. LG純正 SimilarList / SimilarListISDB 完全トレース チャンネル番号入力パネル (左上) */
+#similar-list-box {
+  position: absolute;
+  top: 28px;
+  left: 36px;
+  width: 540px;
+  z-index: 85;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #3c424f;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.88);
+}
+
+#similar-list-box.hidden {
+  display: none;
+}
+
+.sim-input-header {
+  height: 126px;
+  background-color: rgba(0, 0, 0, 0.92);
+  padding: 0 26px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  border-bottom: 2px solid #cf0652;
+}
+
+.sim-band-badge {
+  background-color: #cf0652;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: bold;
+  padding: 6px 14px;
+  border-radius: 6px;
+  margin-right: 20px;
+  min-width: 72px;
+  text-align: center;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.sim-digits {
+  font-size: 74px;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 4px;
+  line-height: 1;
+  white-space: nowrap;
+  -webkit-flex: 1;
+  flex: 1;
+}
+
+.sim-mode-hint {
+  font-size: 18px;
+  color: #a6aeb9;
+  text-align: right;
+  line-height: 1.35;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.sim-list-body {
+  max-height: 372px;
+  overflow-y: auto;
+  background-color: rgba(14, 16, 20, 0.86);
+}
+
+.sim-item {
+  height: 62px;
+  padding: 0 22px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.sim-item.focused, .sim-item:hover {
+  background-color: #cf0652;
+  color: #ffffff;
+}
+
+.sim-item-num {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+  min-width: 68px;
+  margin-right: 12px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.sim-item-sc {
+  background-color: #343944;
+  color: #e2e6ed;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 12px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.sim-item.focused .sim-item-sc, .sim-item:hover .sim-item-sc {
+  background-color: #16181d;
+  color: #ffffff;
+}
+
+.sim-ch-logo {
+  height: 30px;
+  max-width: 60px;
+  width: auto;
+  border-radius: 4px;
+  margin-right: 12px;
+  background-color: #ffffff;
+  padding: 2px 4px;
+  object-fit: contain;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.sim-item-name {
+  font-size: 25px;
+  font-weight: bold;
+  color: #d5dbe3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-flex: 1;
+  flex: 1;
+}
+
+.sim-item.focused .sim-item-name, .sim-item:hover .sim-item-name {
+  color: #ffffff;
+}
+
+.sim-empty {
+  height: 110px;
+  padding: 18px 24px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 23px;
+  color: #c5cbd4;
+}
+
+/* 4. 下部 OSD チャンネル・番組バナー (LG純正 LiveTV バナー準拠・大型文字) */
+#osd-banner {
+  position: absolute;
+  left: 44px;
+  right: 44px;
+  bottom: 88px;
+  background-color: rgba(16, 18, 23, 0.94);
+  border-top: 4px solid #cf0652;
+  border-radius: 12px;
+  padding: 24px 34px;
+  z-index: 25;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.82);
+  opacity: 0;
+  -webkit-transform: translate3d(0, 24px, 0);
+  transform: translate3d(0, 24px, 0);
+  -webkit-transition: opacity 0.22s ease, -webkit-transform 0.22s ease;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  pointer-events: none;
+}
+
+#osd-banner.visible {
+  opacity: 1;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+}
+
+.osd-top-row {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.osd-ch-wrap {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  margin-right: 16px;
+}
+
+.osd-remocon-badge {
+  background-color: #cf0652;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: bold;
+  padding: 4px 18px;
+  border-radius: 8px;
+  margin-right: 16px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.osd-ch-logo {
+  height: 42px;
+  max-width: 88px;
+  width: auto;
+  border-radius: 5px;
+  margin-right: 14px;
+  background-color: #f1f5f9;
+  padding: 2px 5px;
+  object-fit: contain;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.osd-ch-name {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-right: 16px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.osd-badges {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.pill-badge {
+  background-color: #2f333d;
+  color: #e2e6ed;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 6px 14px;
+  border-radius: 6px;
+  margin-left: 10px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.pill-badge.live {
+  background-color: #0077b6;
+  color: #ffffff;
+}
+
+.pill-badge.jk {
+  background-color: #3a3f4b;
+  color: #ffffff;
+  border-left: 4px solid #cf0652;
+}
+
+.pill-badge.rec-btn {
+  background-color: #3b1d24;
+  color: #ff8a8a;
+  border: 2px solid #ef4444;
+  cursor: pointer;
+}
+
+.pill-badge.rec-btn:hover {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.pill-badge.rec-btn.is-recording {
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #fca5a5;
+}
+
+.pill-badge.rec-btn.is-reserved {
+  background-color: #b45309;
+  color: #ffffff;
+  border-color: #fbbf24;
+}
+
+.osd-prog-title {
+  font-size: 38px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.osd-time-row {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.osd-time-text {
+  font-size: 24px;
+  font-weight: bold;
+  color: #c5cbd4;
+  margin-right: 22px;
+  min-width: 200px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.osd-progress-track {
+  -webkit-flex: 1;
+  flex: 1;
+  height: 10px;
+  background-color: #353942;
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+
+.osd-progress-track.seekable {
+  cursor: pointer;
+}
+
+.osd-progress-fill {
+  height: 100%;
+  width: 0%;
+  background-color: #cf0652;
+  border-radius: 5px;
+}
+
+.osd-desc {
+  font-size: 24px;
+  color: #d2d7df;
+  line-height: 1.42;
+  max-height: 68px;
+  overflow: hidden;
+}
+
+.osd-next {
+  margin-top: 10px;
+  font-size: 22px;
+  color: #9ba3b0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 5. 左側 LG LiveMenu スタイル メインドロワー (半画面 940px 幅・大型文字) */
+#left-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 940px;
+  height: 1080px;
+  background-color: rgba(14, 16, 20, 0.94);
+  border-right: 2px solid #31353e;
+  z-index: 35;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  box-shadow: 16px 0 48px rgba(0, 0, 0, 0.82);
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-transition: -webkit-transform 0.20s ease;
+  transition: transform 0.20s ease;
+}
+
+#left-drawer.closed {
+  -webkit-transform: translate3d(-960px, 0, 0);
+  transform: translate3d(-960px, 0, 0);
+}
+
+.drawer-header {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  padding: 20px 30px 18px 30px;
+  border-bottom: 2px solid #2c3038;
+}
+
+.brand-title {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  min-width: 0;
+  margin-right: 16px;
+}
+
+.brand-accent-bar {
+  width: 10px;
+  height: 64px;
+  background-color: #cf0652;
+  border-radius: 5px;
+  margin-right: 18px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.brand-text-col {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-main {
+  font-size: 66px;
+  font-weight: bold;
+  color: #ffffff;
+  line-height: 1.02;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.brand-sub {
+  font-size: 20px;
+  color: #9ba3b0;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-clock {
+  font-size: 40px;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+/* ナビゲーションタブ (LG純正フラットピル + #cf0652 選択ハイライト) */
+.nav-tabs {
+  display: -webkit-flex;
+  display: flex;
+  padding: 12px 22px;
+  border-bottom: 2px solid #2c3038;
+  overflow-x: auto;
+}
+
+.nav-tab {
+  -webkit-flex: 1 0 auto;
+  flex: 1 0 auto;
+  text-align: center;
+  padding: 11px 10px;
+  margin-right: 8px;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #b8bec8;
+  background-color: #252830;
+  border: 3px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nav-tab:last-child {
+  margin-right: 0;
+}
+
+.nav-tab.active {
+  background-color: #cf0652;
+  color: #ffffff;
+}
+
+/* LG純正フォーカス表現 (#cf0652) */
+.focusable.focused, .focusable:hover {
+  border-color: #ffffff !important;
+  background-color: #cf0652 !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 22px rgba(207, 6, 82, 0.55);
+}
+
+.focusable.focused .ch-prog-name,
+.focusable.focused .ch-prog-time,
+.focusable.focused .tver-ep-title,
+.focusable.focused .tver-meta,
+.focusable.focused .setting-desc,
+.focusable:hover .ch-prog-name,
+.focusable:hover .ch-prog-time,
+.focusable:hover .tver-ep-title,
+.focusable:hover .tver-meta {
+  color: #ffffff !important;
+}
+
+.focusable.focused .ch-mini-fill,
+.focusable:hover .ch-mini-fill {
+  background-color: #ffffff !important;
+}
+
+.focusable.focused .ch-num,
+.focusable:hover .ch-num {
+  background-color: #16181d !important;
+}
+
+#drawer-body {
+  -webkit-flex: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 26px 92px 26px;
+}
+
+/* セクション見出し (履歴・カテゴリ用) */
+.section-heading {
+  font-size: 24px;
+  font-weight: bold;
+  color: #d5dbe3;
+  margin: 10px 0 14px 0;
+  padding-left: 14px;
+  border-left: 6px solid #cf0652;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+}
+
+/* チャンネル・履歴カード (55インチ向け大文字) */
+.ch-card {
+  background-color: #24272f;
+  border: 3px solid #323640;
+  border-radius: 10px;
+  padding: 16px 22px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.ch-card.playing {
+  border-color: #00b4d8;
+  background-color: #1b2a34;
+}
+
+.ch-card.history-card {
+  border-left: 8px solid #00b4d8;
+  background-color: #202731;
+}
+
+.ch-card-top {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ch-card-name-wrap {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+  overflow: hidden;
+}
+
+.ch-num {
+  background-color: #3c424f;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: bold;
+  padding: 3px 12px;
+  border-radius: 6px;
+  margin-right: 12px;
+  min-width: 54px;
+  text-align: center;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.ch-card-logo {
+  height: 36px;
+  max-width: 76px;
+  width: auto;
+  border-radius: 5px;
+  margin-right: 14px;
+  background-color: #f1f5f9;
+  padding: 2px 5px;
+  object-fit: contain;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.epg-ch-logo {
+  height: 28px;
+  max-width: 58px;
+  width: auto;
+  border-radius: 4px;
+  margin-right: 10px;
+  background-color: #f1f5f9;
+  padding: 1px 4px;
+  object-fit: contain;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.ch-name {
+  font-size: 29px;
+  font-weight: bold;
+  color: #ffffff;
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-jk-wrap {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+
+.ch-jk-tag {
+  font-size: 20px;
+  font-weight: bold;
+  color: #e2e6ed;
+  background-color: rgba(255, 255, 255, 0.14);
+  padding: 0 12px;
+  height: 32px;
+  line-height: 32px;
+  box-sizing: border-box;
+  display: -webkit-inline-flex;
+  display: inline-flex;
+  -webkit-align-items: center;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+/* KonomiTV 準拠 ニコニコ実況勢い 4段階カラー (normal / many / so-many / festival) */
+.ch-force-tag {
+  font-size: 20px;
+  font-weight: bold;
+  padding: 0 12px;
+  height: 32px;
+  line-height: 32px;
+  box-sizing: border-box;
+  display: -webkit-inline-flex;
+  display: inline-flex;
+  -webkit-align-items: center;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  margin-left: 6px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+.ch-force-tag.force-normal {
+  color: #cfd6e0;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.ch-force-tag.force-many {
+  color: #1a1500;
+  background-color: #f6d55c;
+}
+.ch-force-tag.force-so-many {
+  color: #ffffff;
+  background-color: #ef6c00;
+}
+.ch-force-tag.force-festival {
+  color: #ffffff;
+  background-color: #e6004c;
+}
+
+.ch-prog-name {
+  font-size: 25px;
+  color: #e6eaf0;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-prog-meta {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+}
+
+.ch-prog-time {
+  font-size: 21px;
+  color: #a6aeb9;
+  margin-right: 16px;
+  min-width: 145px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.ch-mini-bar {
+  -webkit-flex: 1;
+  flex: 1;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ch-mini-fill {
+  height: 100%;
+  background-color: #cf0652;
+}
+
+/* TVer / Abema TV カード */
+.tver-toolbar {
+  display: -webkit-flex;
+  display: flex;
+  margin-bottom: 16px;
+}
+
+.tver-input {
+  -webkit-flex: 1;
+  flex: 1;
+  background-color: #16181d;
+  color: #ffffff;
+  border: 3px solid #3c424f;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 25px;
+  margin-right: 12px;
+  outline: none;
+}
+
+.tver-input:focus {
+  border-color: #cf0652;
+}
+
+.btn-action {
+  background-color: #343944;
+  color: #ffffff;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-size: 23px;
+  font-weight: bold;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.btn-action.focused, .btn-action:hover {
+  background-color: #cf0652 !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px #ffffff, 0 8px 22px rgba(207, 6, 82, 0.65);
+}
+
+.btn-action.active-toggle {
+  background-color: #1f4f46;
+  border-color: #2dd4bf;
+}
+
+.tver-card {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  background-color: #24272f;
+  border: 3px solid #323640;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.tver-card.history-card {
+  border-left: 8px solid #00b4d8;
+  background-color: #1f2732;
+}
+
+.tver-card.off-air-card {
+  background-color: #1c1f26;
+  border-color: #2d323d;
+}
+
+.tver-card.premium-locked-card {
+  background-color: #181a20;
+  border-color: #2b2f38;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tver-card.premium-locked-card .tver-thumb {
+  -webkit-filter: grayscale(88%);
+  filter: grayscale(88%);
+}
+
+.tver-card.premium-locked-card .tver-series,
+.tver-card.premium-locked-card .tver-ep-title {
+  color: #9ca3af;
+}
+
+.tver-card.premium-locked-card.focused,
+.tver-card.premium-locked-card:hover {
+  background-color: #262933;
+  border-color: #6b7280;
+  opacity: 0.78;
+}
+
+.tver-thumb-wrap {
+  width: 224px;
+  height: 126px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #171a22 0%, #101218 100%);
+  border: 1px solid #323744;
+  margin-right: 18px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+.tver-thumb-dummy-brand {
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+  color: #94a3b8;
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 2px 12px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.tver-thumb-dummy-sub {
+  font-size: 18px;
+  font-weight: bold;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.tver-card.off-air-card .tver-thumb-dummy-sub {
+  color: #cbd5e1;
+}
+
+.tver-thumb {
+  width: 224px;
+  height: 126px;
+  border-radius: 6px;
+  background-color: #14161a;
+  margin-right: 18px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  object-fit: cover;
+  display: block;
+}
+
+.tver-thumb-wrap .tver-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin-right: 0;
+}
+
+.tver-info {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.tver-series {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tver-ep-title {
+  font-size: 22px;
+  color: #d5dbe3;
+  margin-bottom: 8px;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.tver-meta {
+  font-size: 20px;
+  color: #a6aeb9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resume-pill {
+  display: inline-block;
+  background-color: #0077b6;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 2px 12px;
+  border-radius: 6px;
+  margin-top: 6px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.vod-saved-pill {
+  display: inline-block;
+  font-size: 19px;
+  font-weight: bold;
+  padding: 2px 12px;
+  border-radius: 6px;
+  margin-top: 6px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.vod-saved-pill.saved {
+  background-color: #166534;
+  color: #dcfce7;
+  border: 1px solid #22c55e;
+}
+
+.vod-saved-pill.active {
+  background-color: #1e40af;
+  color: #dbeafe;
+  border: 1px solid #60a5fa;
+}
+
+.vod-saved-pill.premium {
+  background-color: #374151;
+  color: #d1d5db;
+  border: 1px solid #6b7280;
+}
+
+/* 設定パネル */
+.setting-group {
+  background-color: #22252c;
+  border-radius: 10px;
+  padding: 22px;
+  margin-bottom: 18px;
+  border: 2px solid #323640;
+}
+
+.setting-label {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.setting-desc {
+  font-size: 22px;
+  color: #adb5c2;
+  margin-bottom: 14px;
+  line-height: 1.45;
+}
+
+.preset-row {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+}
+
+.preset-row .btn-action {
+  margin-right: 12px;
+  margin-bottom: 12px;
+}
+
+/* 6. 2次元ラテ欄 EPG 番組表オーバーレイ (DTV Plus グリッド番組表) */
+#epg-overlay {
+  position: absolute;
+  top: 24px;
+  left: 36px;
+  width: 1848px;
+  height: 944px;
+  background-color: rgba(14, 16, 20, 0.97);
+  border: 2px solid #3c424f;
+  border-radius: 12px;
+  z-index: 45;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+}
+
+#epg-overlay.hidden {
+  display: none;
+}
+
+.epg-top-bar {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  padding: 16px 26px;
+  border-bottom: 2px solid #2e323b;
+  background-color: #1a1d24;
+  border-radius: 12px 12px 0 0;
+}
+
+.epg-title-wrap {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  margin-right: 14px;
+}
+
+.epg-main-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-right: 20px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.epg-controls {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.epg-controls .btn-action {
+  margin-left: 7px;
+  padding: 9px 13px;
+  font-size: 20px;
+}
+
+.epg-controls .btn-action.epg-active {
+  background-color: #cf0652;
+}
+
+.epg-header-row {
+  display: -webkit-flex;
+  display: flex;
+  background-color: #20242d;
+  border-bottom: 2px solid #353942;
+  height: 68px;
+  overflow: hidden;
+}
+
+.epg-time-corner {
+  width: 104px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  border-right: 2px solid #353942;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  font-size: 21px;
+  font-weight: bold;
+  color: #a6aeb9;
+}
+
+#epg-ch-headers {
+  display: -webkit-flex;
+  display: flex;
+  overflow: hidden;
+  -webkit-flex: 1;
+  flex: 1;
+}
+
+.epg-ch-hdr-cell {
+  width: 288px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  border-right: 1px solid #353942;
+  padding: 10px 14px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.epg-viewport {
+  -webkit-flex: 1;
+  flex: 1;
+  display: -webkit-flex;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+#epg-time-axis {
+  width: 104px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  background-color: #191c22;
+  border-right: 2px solid #353942;
+  overflow: hidden;
+  position: relative;
+}
+
+.epg-hour-label {
+  position: absolute;
+  left: 0;
+  width: 104px;
+  border-top: 1px solid #353942;
+  padding-top: 8px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #d2d7df;
+}
+
+#epg-grid-scroll {
+  -webkit-flex: 1;
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+#epg-columns-wrap {
+  display: -webkit-flex;
+  display: flex;
+  position: relative;
+}
+
+.epg-col {
+  width: 288px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  position: relative;
+  border-right: 1px solid #2e323b;
+  background-color: #16181e;
+}
+
+.epg-cell {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  background-color: #252932;
+  border: 2px solid #363b47;
+  border-radius: 6px;
+  padding: 8px 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.epg-cell.on-air {
+  background-color: #1f2e3a;
+  border-color: #00b4d8;
+}
+
+.epg-cell.is-reserved {
+  background-color: #2f2418;
+  border-color: #f59e0b;
+  border-left: 7px solid #f59e0b;
+}
+
+.epg-cell.is-recording {
+  background-color: #3a1920;
+  border-color: #ef4444;
+  border-left: 7px solid #ef4444;
+}
+
+.epg-cell.is-off-air {
+  background-color: #1b1e25;
+  border-color: #2b303a;
+  opacity: 0.72;
+}
+
+.epg-rec-badge {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 1px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.epg-rec-badge.recording {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.epg-rec-badge.reserved {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
+.epg-cell.focused, .epg-cell:hover {
+  background-color: #cf0652 !important;
+  border-color: #ffffff !important;
+  z-index: 5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+.epg-cell-time {
+  font-size: 20px;
+  font-weight: bold;
+  color: #9ec5fe;
+  margin-bottom: 4px;
+}
+
+.epg-cell.focused .epg-cell-time, .epg-cell:hover .epg-cell-time {
+  color: #ffffff;
+}
+
+.epg-cell-title {
+  font-size: 23px;
+  font-weight: bold;
+  color: #ffffff;
+  line-height: 1.32;
+}
+
+.epg-cell-desc {
+  margin-top: 6px;
+  font-size: 20px;
+  color: #b8bec8;
+  line-height: 1.35;
+}
+
+.epg-cell.focused .epg-cell-desc, .epg-cell:hover .epg-cell-desc {
+  color: #f4f6f8;
+}
+
+.epg-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: #cf0652;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* 7. 番組詳細 & 録画・保存予約モーダルダイアログ */
+#modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  background-color: rgba(0, 0, 0, 0.76);
+  z-index: 70;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+#modal-backdrop.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: 1080px;
+  max-height: 860px;
+  background-color: #1e2128;
+  border: 2px solid #454b59;
+  border-top: 6px solid #cf0652;
+  border-radius: 14px;
+  padding: 32px 38px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.9);
+}
+
+.modal-sub {
+  font-size: 23px;
+  font-weight: bold;
+  color: #9ec5fe;
+  margin-bottom: 8px;
+}
+
+.modal-title {
+  font-size: 34px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 16px;
+  line-height: 1.35;
+}
+
+.modal-body {
+  font-size: 24px;
+  color: #d5dbe3;
+  line-height: 1.55;
+  overflow-y: auto;
+  max-height: 440px;
+  margin-bottom: 26px;
+  white-space: pre-wrap;
+}
+
+.modal-body-with-qr {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: flex-start;
+  align-items: flex-start;
+  white-space: normal;
+  overflow: visible;
+}
+
+.modal-body-text {
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 420px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.modal-qr-box {
+  -webkit-flex: 0 0 184px;
+  flex: 0 0 184px;
+  width: 184px;
+  margin-left: 24px;
+  padding: 12px;
+  background-color: #14171d;
+  border: 2px solid #353b47;
+  border-radius: 10px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.modal-qr-box.clickable {
+  cursor: pointer;
+}
+
+.modal-qr-box.clickable:hover {
+  border-color: #00b4d8;
+  background-color: #19222d;
+}
+
+.modal-qr-svg {
+  width: 156px;
+  height: 156px;
+  margin: 0 auto 8px auto;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #ffffff;
+  line-height: 0;
+}
+
+.modal-qr-caption {
+  font-size: 16px;
+  color: #b7c0ce;
+  line-height: 1.3;
+}
+
+.modal-actions {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  -webkit-justify-content: flex-end;
+  justify-content: flex-end;
+}
+
+.modal-actions .btn-action {
+  margin-left: 16px;
+  margin-top: 10px;
+  font-size: 25px;
+  padding: 14px 28px;
+}
+
+/* 8. 右側 ニコニコ実況リアルタイムコメントログ (フルハイト 1080px・下部ガイドバーの背面に配置し隙間ゼロ化) */
+#right-comment-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 500px;
+  height: 1080px;
+  background-color: rgba(16, 18, 22, 0.92);
+  border-left: 2px solid #31353e;
+  z-index: 30;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-transition: -webkit-transform 0.20s ease;
+  transition: transform 0.20s ease;
+}
+
+#right-comment-panel.closed {
+  -webkit-transform: translate3d(510px, 0, 0);
+  transform: translate3d(510px, 0, 0);
+}
+
+.comment-panel-hdr {
+  padding: 20px 24px;
+  border-bottom: 2px solid #2c3038;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+}
+
+.comment-panel-title {
+  font-size: 26px;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  margin-right: 10px;
+}
+
+.comment-force {
+  font-size: 22px;
+  font-weight: bold;
+  color: #2dd4bf;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+#comment-log-list {
+  -webkit-flex: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 20px 84px 20px;
+}
+
+.comment-row {
+  padding: 10px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 23px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.comment-time {
+  font-size: 19px;
+  color: #9096a2;
+  margin-right: 10px;
+}
+
+/* 9. 最下部 リモコン操作ガイドバー (55インチ視認性重視 & 1文字折り返し完全禁止) */
+#bottom-guide-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1920px;
+  height: 72px;
+  background-color: rgba(12, 14, 18, 0.95);
+  border-top: 2px solid #2c3038;
+  z-index: 40;
+  padding: 0 22px;
+  overflow: hidden;
+  -webkit-transition: opacity 0.25s ease;
+  transition: opacity 0.25s ease;
+}
+
+#bottom-guide-bar.auto-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.guide-bar-inner {
+  width: 100%;
+  height: 100%;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+}
+
+.guide-bar-inner.hidden {
+  display: none;
+}
+
+.guide-group {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.guide-btn {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-right: 10px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #eef1f6;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.guide-group .guide-btn:last-child {
+  margin-right: 0;
+}
+
+.guide-btn span {
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.guide-btn:hover {
+  background-color: #cf0652;
+}
+
+.guide-btn.active-guide {
+  background-color: rgba(207, 6, 82, 0.32);
+  border: 1px solid #cf0652;
+}
+
+.key-cap-rec {
+  background-color: #991b1b;
+}
+
+.guide-btn.is-recording {
+  background-color: rgba(220, 38, 38, 0.36);
+  border: 1px solid #ef4444;
+}
+
+.guide-btn.is-recording .key-cap-rec {
+  background-color: #dc2626;
+}
+
+.guide-btn.is-reserved {
+  background-color: rgba(217, 119, 6, 0.28);
+  border: 1px solid #f59e0b;
+}
+
+.guide-btn.is-reserved .key-cap-rec {
+  background-color: #d97706;
+}
+
+.color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  margin-right: 8px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.dot-red    { background-color: #ef4444; }
+.dot-green  { background-color: #22c55e; }
+.dot-yellow { background-color: #eab308; }
+.dot-blue   { background-color: #3b82f6; }
+
+.key-cap {
+  background-color: #343944;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-right: 8px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.key-cap-bml {
+  background-color: #1d4ed8;
+  font-family: "Arial Black", "LG Smart UI", sans-serif;
+  padding: 3px 11px;
+}
+
+/* 10. 全画面 録画・保存ライブラリ (#recorded-overlay) */
+#recorded-overlay {
+  position: absolute;
+  top: 24px;
+  left: 36px;
+  width: 1848px;
+  height: 948px;
+  background-color: rgba(14, 16, 20, 0.98);
+  border: 2px solid #3c424f;
+  border-radius: 12px;
+  z-index: 48;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.92);
+}
+
+#recorded-overlay.hidden {
+  display: none;
+}
+
+.rec-top-bar {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  padding: 14px 24px;
+  border-bottom: 2px solid #2e323b;
+  background-color: #1a1d24;
+  border-radius: 12px 12px 0 0;
+}
+
+.rec-title-wrap {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-storage-badge {
+  background-color: #262b35;
+  color: #2dd4bf;
+  font-size: 20px;
+  font-weight: bold;
+  padding: 5px 14px;
+  border-radius: 6px;
+  margin-left: 16px;
+  border: 1px solid #3c424f;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-toolbar {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-toolbar .btn-action {
+  margin-left: 8px;
+  padding: 9px 15px;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.rec-toolbar .btn-action.epg-active {
+  background-color: #cf0652;
+}
+
+.rec-search-input {
+  width: 240px;
+  background-color: #121419;
+  color: #ffffff;
+  border: 2px solid #3c424f;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 20px;
+  margin-left: 12px;
+  outline: none;
+}
+
+.rec-search-input:focus, .rec-search-input.focused {
+  border-color: #ffffff !important;
+  background-color: #2d1622 !important;
+  box-shadow: 0 0 0 3px #cf0652, 0 6px 18px rgba(207, 6, 82, 0.55);
+}
+
+.rec-body-split {
+  -webkit-flex: 1;
+  flex: 1;
+  display: -webkit-flex;
+  display: flex;
+  overflow: hidden;
+}
+
+.rec-sidebar {
+  width: 390px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  background-color: #171a21;
+  border-right: 2px solid #2e323b;
+  overflow-y: auto;
+  padding: 16px 16px 28px 16px;
+}
+
+.rec-side-hdr {
+  font-size: 20px;
+  font-weight: bold;
+  color: #9ba3b0;
+  margin: 14px 4px 8px 4px;
+  padding-left: 10px;
+  border-left: 4px solid #cf0652;
+}
+
+.rec-side-hdr:first-child {
+  margin-top: 2px;
+}
+
+.rec-side-item {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background-color: #21252e;
+  border: 2px solid transparent;
+  color: #e2e6ed;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.rec-side-item.active {
+  background-color: #2d1b28;
+  border-color: #cf0652;
+  color: #ffffff;
+}
+
+.rec-side-item.focused, .rec-side-item:hover {
+  background-color: #cf0652 !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.rec-side-label {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+.rec-side-cnt {
+  background-color: rgba(0, 0, 0, 0.35);
+  color: #cbd5e1;
+  font-size: 19px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-main-pane {
+  -webkit-flex: 1;
+  flex: 1;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rec-main-list {
+  -webkit-flex: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px;
+}
+
+.rec-item-card {
+  display: -webkit-flex;
+  display: flex;
+  background-color: #232730;
+  border: 3px solid #323743;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.rec-item-card.focused, .rec-item-card:hover {
+  background-color: #cf0652 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(207, 6, 82, 0.5);
+}
+
+.rec-thumb-wrap {
+  width: 256px;
+  height: 144px;
+  background-color: #121419;
+  border-radius: 8px;
+  margin-right: 20px;
+  position: relative;
+  overflow: hidden;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+.rec-thumb-img {
+  width: 256px;
+  height: 144px;
+  object-fit: cover;
+}
+
+.rec-thumb-dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background-color: rgba(0, 0, 0, 0.84);
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.rec-card-body {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+}
+
+.rec-card-meta-top {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rec-card-ch {
+  font-size: 21px;
+  font-weight: bold;
+  color: #9ec5fe;
+  margin-right: 16px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-item-card.focused .rec-card-ch,
+.rec-item-card:hover .rec-card-ch,
+.rec-item-card.focused .rec-card-time,
+.rec-item-card:hover .rec-card-time,
+.rec-item-card.focused .rec-card-desc,
+.rec-item-card:hover .rec-card-desc {
+  color: #ffffff !important;
+}
+
+.rec-card-time {
+  font-size: 21px;
+  color: #b8bec8;
+  margin-right: 14px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-type-pill {
+  background-color: #343944;
+  color: #e2e6ed;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 2px 10px;
+  border-radius: 5px;
+  margin-right: 8px;
+  white-space: nowrap;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-type-pill.recording {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.rec-card-title {
+  font-size: 27px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-card-desc {
+  font-size: 21px;
+  color: #c5cbd4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-pager-bar {
+  height: 68px;
+  background-color: #191c23;
+  border-top: 2px solid #2e323b;
+  padding: 0 24px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+}
+
+.rec-pager-btns {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.rec-pager-btns .btn-action {
+  margin-left: 12px;
+  padding: 8px 20px;
+  font-size: 21px;
+}

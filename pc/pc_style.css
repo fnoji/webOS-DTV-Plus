@@ -1,0 +1,765 @@
+/* -*- coding: utf-8 -*-
+ * pc_style.css - DTV Plus PC版 (Chrome デスクトップウィンドウ) 専用レスポンシブスタイル
+ * ※ pc/ 配下のため LG webOS .ipk には一切同梱されず、TVアプリ側 (app/css/app.css) の挙動には一切影響しない
+ */
+
+:root {
+  --pc-guide-h: 44px;
+}
+
+html, body {
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  cursor: default !important;
+  user-select: none;
+  font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif !important;
+}
+
+/* =========================================================================
+ * 1. 映像・字幕・スーパー・BML・弾幕・待機画面
+ *    映像レイヤー (#video-container) は #pc-tv-stage (1920x1080) 内に収め、
+ *    BML (#bml-stage)・弾幕 (#danmaku-layer) と完全に同一の 16:9 領域へ
+ *    pc_adapter.js から厳密スケーリングする。
+ *    これにより通常視聴も BML データ放送時の小窓縮小+字幕も 1px ズレなく表示される。
+ * ========================================================================= */
+#pc-tv-stage {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 1920px !important;
+  height: 1080px !important;
+  transform-origin: 0 0 !important;
+  overflow: hidden !important;
+  background: #000000;
+  z-index: 1;
+}
+
+#tv-video {
+  background: #000000;
+  object-fit: contain;
+}
+
+#standby-placeholder {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 弾幕レイヤー (1920x1080 座標系で計算されるため pc_adapter.js で 16:9 映像領域へ厳密スケーリング) */
+#danmaku-layer {
+  position: fixed !important;
+  width: 1920px !important;
+  height: 1080px !important;
+  transform-origin: 0 0 !important;
+  overflow: hidden !important;
+}
+
+/* BML データ放送は pc_adapter.js 側で 16:9 映像領域へ厳密フィットさせる */
+#bml-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+.bml-status-badge {
+  right: 16px !important;
+  bottom: calc(var(--pc-guide-h) + 12px) !important;
+  font-size: 13px !important;
+  padding: 6px 12px !important;
+}
+.bml-input-overlay {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(92vw, 560px) !important;
+  padding: 18px 20px !important;
+  box-sizing: border-box !important;
+}
+
+/* 待機画面の文字をウィンドウサイズへレスポンシブ適応 */
+#standby-placeholder {
+  padding: 24px !important;
+  box-sizing: border-box !important;
+}
+.standby-badge {
+  font-size: clamp(11px, 1.1vw, 15px) !important;
+  padding: 5px 14px !important;
+  margin-bottom: 10px !important;
+}
+.standby-logo {
+  font-size: clamp(32px, 5vw, 68px) !important;
+}
+.standby-msg {
+  font-size: clamp(13px, 1.4vw, 20px) !important;
+  max-width: 90vw !important;
+  text-align: center !important;
+}
+
+/* =========================================================================
+ * 2. 左ドロワー メニュー (高さ100vh・幅は画面に応じて流体変化)
+ * ========================================================================= */
+#left-drawer {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: clamp(340px, 44vw, 640px) !important;
+  max-width: 94vw !important;
+  height: 100vh !important;
+  padding-bottom: var(--pc-guide-h) !important;
+  box-sizing: border-box !important;
+}
+#left-drawer.closed {
+  transform: translate3d(-105%, 0, 0) !important;
+}
+
+.drawer-header {
+  padding: 12px 16px 10px 16px !important;
+}
+.brand-accent-bar {
+  height: 26px !important;
+  width: 4px !important;
+  margin-right: 10px !important;
+}
+.brand-main {
+  font-size: clamp(18px, 1.8vw, 24px) !important;
+}
+.brand-sub {
+  font-size: clamp(11px, 1.0vw, 13px) !important;
+}
+.header-clock {
+  font-size: clamp(16px, 1.6vw, 22px) !important;
+}
+
+/* ナビゲーションタブ (折り返し対応で小ウィンドウでも全タブが見える) */
+.nav-tabs {
+  padding: 8px 12px !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  overflow-x: visible !important;
+}
+.nav-tab {
+  font-size: clamp(12px, 1.1vw, 15px) !important;
+  padding: 6px 10px !important;
+  margin-right: 0 !important;
+  border-width: 2px !important;
+  border-radius: 6px !important;
+}
+
+#drawer-body {
+  padding: 12px 14px 24px 14px !important;
+}
+
+.section-heading {
+  font-size: clamp(13px, 1.15vw, 16px) !important;
+  margin: 12px 0 8px 0 !important;
+  padding: 4px 10px !important;
+}
+
+/* チャンネルカード (地デジ / BS / BS4K / CS) */
+.ch-card {
+  padding: 10px 12px !important;
+  margin-bottom: 8px !important;
+  border-width: 2px !important;
+  border-radius: 8px !important;
+}
+.ch-num {
+  font-size: clamp(13px, 1.1vw, 16px) !important;
+  padding: 2px 7px !important;
+  min-width: 34px !important;
+  margin-right: 8px !important;
+}
+.ch-card-logo {
+  height: 22px !important;
+  max-width: 48px !important;
+  width: auto !important;
+  margin-right: 8px !important;
+  object-fit: contain !important;
+}
+.ch-name {
+  font-size: clamp(14px, 1.25vw, 18px) !important;
+}
+.ch-jk-tag,
+.ch-force-tag {
+  font-size: 11px !important;
+  font-weight: bold !important;
+  line-height: 20px !important;
+  height: 20px !important;
+  padding: 0 6px !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+}
+.ch-force-tag {
+  margin-left: 4px !important;
+}
+.ch-prog-name {
+  font-size: clamp(12px, 1.1vw, 15px) !important;
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
+}
+.ch-prog-meta {
+  margin-top: 2px !important;
+}
+.ch-prog-time {
+  font-size: clamp(11px, 0.95vw, 13px) !important;
+  min-width: 96px !important;
+  margin-right: 10px !important;
+}
+.ch-mini-bar {
+  height: 5px !important;
+}
+
+/* TVer / ABEMA カード & ツールバー */
+.tver-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-bottom: 10px !important;
+}
+.tver-input {
+  font-size: 13px !important;
+  padding: 7px 10px !important;
+  min-width: 140px !important;
+  flex: 1 1 180px !important;
+  border-radius: 6px !important;
+}
+.preset-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+.btn-action {
+  font-size: clamp(12px, 1.0vw, 14px) !important;
+  padding: 6px 11px !important;
+  border-width: 2px !important;
+  border-radius: 6px !important;
+  margin-right: 0 !important;
+}
+
+.tver-card {
+  padding: 8px 10px !important;
+  margin-bottom: 8px !important;
+  border-width: 2px !important;
+  border-radius: 8px !important;
+  gap: 10px !important;
+}
+.tver-thumb-wrap {
+  width: clamp(112px, 13vw, 176px) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  margin-right: 0 !important;
+  flex-shrink: 0 !important;
+}
+.tver-thumb {
+  width: clamp(112px, 13vw, 176px) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  margin-right: 0 !important;
+  flex-shrink: 0 !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+.tver-thumb-wrap .tver-thumb {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: auto !important;
+  object-fit: cover !important;
+  margin-right: 0 !important;
+}
+.tver-thumb-dummy-brand {
+  font-size: 14px !important;
+}
+.tver-thumb-dummy-sub {
+  font-size: 11px !important;
+}
+.tver-series {
+  font-size: clamp(13px, 1.15vw, 16px) !important;
+}
+.tver-ep-title {
+  font-size: clamp(12px, 1.0vw, 14px) !important;
+  margin-top: 2px !important;
+}
+.tver-meta {
+  font-size: clamp(11px, 0.95vw, 12px) !important;
+  margin-top: 3px !important;
+}
+.resume-pill,
+.vod-saved-pill {
+  font-size: 11px !important;
+  padding: 2px 7px !important;
+  margin-top: 4px !important;
+  margin-right: 6px !important;
+}
+
+/* 設定タブ */
+.setting-group {
+  padding: 12px 14px !important;
+  margin-bottom: 10px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+}
+.setting-label {
+  font-size: clamp(14px, 1.2vw, 17px) !important;
+  margin-bottom: 6px !important;
+}
+.setting-desc {
+  font-size: clamp(11px, 1.0vw, 13px) !important;
+  margin-bottom: 8px !important;
+}
+
+/* =========================================================================
+ * 3. 全画面オーバーレイ (番組表 EPG / 録画ライブラリ / モーダル)
+ * ========================================================================= */
+#epg-overlay,
+#recorded-overlay {
+  position: fixed !important;
+  top: 12px !important;
+  left: 14px !important;
+  right: 14px !important;
+  bottom: calc(var(--pc-guide-h) + 10px) !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 10px !important;
+}
+
+.epg-top-bar,
+.rec-top-bar {
+  padding: 10px 14px !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+.epg-main-title {
+  font-size: clamp(16px, 1.6vw, 22px) !important;
+}
+.epg-controls,
+.rec-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.epg-controls .btn-action,
+.rec-toolbar .btn-action {
+  margin-left: 0 !important;
+  padding: 5px 10px !important;
+  font-size: clamp(12px, 1.0vw, 14px) !important;
+}
+.rec-search-input {
+  font-size: 13px !important;
+  padding: 6px 10px !important;
+  width: clamp(140px, 18vw, 240px) !important;
+}
+.rec-storage-badge {
+  font-size: 12px !important;
+  padding: 3px 8px !important;
+  margin-left: 8px !important;
+}
+
+.epg-header-row {
+  height: 44px !important;
+}
+.epg-time-corner {
+  width: 64px !important;
+  font-size: 12px !important;
+}
+#epg-time-axis {
+  width: 64px !important;
+}
+.epg-hour-label {
+  width: 64px !important;
+  font-size: 12px !important;
+}
+.epg-ch-hdr-cell {
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+}
+.epg-ch-logo {
+  height: 18px !important;
+  max-width: 40px !important;
+  width: auto !important;
+  margin-right: 6px !important;
+  object-fit: contain !important;
+}
+.epg-cell-title {
+  font-size: 12px !important;
+}
+.epg-cell-time,
+.epg-cell-desc {
+  font-size: 11px !important;
+}
+.epg-rec-badge {
+  font-size: 10px !important;
+  padding: 1px 5px !important;
+  margin-left: 5px !important;
+}
+
+/* 録画ライブラリ サイドバー & カード一覧 */
+.rec-sidebar {
+  width: clamp(180px, 22vw, 270px) !important;
+  padding: 10px !important;
+}
+.rec-side-hdr {
+  font-size: 12px !important;
+  margin: 10px 4px 6px 4px !important;
+  padding-left: 8px !important;
+}
+.rec-side-item {
+  font-size: 13px !important;
+  padding: 7px 10px !important;
+  margin-bottom: 5px !important;
+}
+.rec-side-cnt {
+  font-size: 11px !important;
+  padding: 1px 7px !important;
+}
+.rec-main-list {
+  padding: 12px 14px !important;
+}
+.rec-pager-bar {
+  height: auto !important;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+}
+.rec-pager-btns .btn-action {
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  margin-left: 6px !important;
+}
+.rec-item-card {
+  padding: 10px 12px !important;
+  margin-bottom: 8px !important;
+  border-width: 2px !important;
+  align-items: center !important;
+}
+.rec-thumb-wrap {
+  width: clamp(120px, 14vw, 184px) !important;
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  margin-right: 12px !important;
+  flex-shrink: 0 !important;
+}
+.rec-thumb-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+.rec-thumb-dur {
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  right: 5px !important;
+  bottom: 5px !important;
+}
+.rec-card-ch,
+.rec-card-time {
+  font-size: 12px !important;
+  margin-right: 10px !important;
+}
+.rec-type-pill {
+  font-size: 11px !important;
+  padding: 1px 7px !important;
+  margin-right: 6px !important;
+}
+.rec-card-title {
+  font-size: clamp(13px, 1.15vw, 16px) !important;
+  margin-bottom: 4px !important;
+}
+.rec-card-desc {
+  font-size: 12px !important;
+}
+
+/* 極小幅ウィンドウでは録画サイドバーを上段コンパクトリストへ自動切替 */
+@media (max-width: 760px) {
+  .rec-body-split {
+    flex-direction: column !important;
+  }
+  .rec-sidebar {
+    width: 100% !important;
+    max-height: 120px !important;
+    border-right: none !important;
+    border-bottom: 2px solid #2e323b !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .rec-side-item {
+    margin-bottom: 0 !important;
+  }
+}
+
+/* モーダルダイアログ */
+#modal-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+}
+.modal-card {
+  width: min(92vw, 700px) !important;
+  max-height: 86vh !important;
+  padding: 18px 22px !important;
+  box-sizing: border-box !important;
+}
+.modal-sub {
+  font-size: 12px !important;
+}
+.modal-title {
+  font-size: clamp(16px, 1.6vw, 22px) !important;
+  margin: 4px 0 10px 0 !important;
+}
+.modal-body {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  overflow-y: auto !important;
+}
+.modal-actions {
+  margin-top: 14px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+.modal-actions .btn-action {
+  margin-left: 0 !important;
+  font-size: 13px !important;
+  padding: 7px 14px !important;
+}
+
+/* =========================================================================
+ * 4. 右側コメントパネル / OSD / 下部ガイドバー / 通知 / 選局候補
+ * ========================================================================= */
+#right-comment-panel {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: var(--pc-guide-h) !important;
+  width: clamp(240px, 26vw, 380px) !important;
+  height: auto !important;
+}
+#right-comment-panel.closed {
+  transform: translate3d(105%, 0, 0) !important;
+}
+.comment-panel-hdr {
+  padding: 10px 12px !important;
+}
+.comment-panel-title {
+  font-size: 14px !important;
+}
+.comment-force {
+  font-size: 12px !important;
+}
+.comment-log-row {
+  font-size: 13px !important;
+  padding: 5px 10px !important;
+}
+
+#osd-banner {
+  position: fixed !important;
+  left: 16px !important;
+  right: 16px !important;
+  bottom: calc(var(--pc-guide-h) + 10px) !important;
+  max-width: 1080px !important;
+  margin: 0 auto !important;
+  padding: 12px 18px !important;
+  border-top-width: 3px !important;
+  border-radius: 10px !important;
+}
+.osd-remocon-badge {
+  font-size: 14px !important;
+  padding: 2px 8px !important;
+}
+.osd-ch-logo {
+  height: 22px !important;
+}
+.osd-ch-name {
+  font-size: clamp(14px, 1.4vw, 19px) !important;
+}
+.pill-badge {
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+}
+.osd-prog-title {
+  font-size: clamp(15px, 1.5vw, 21px) !important;
+  margin: 6px 0 4px 0 !important;
+}
+.osd-time-text,
+.osd-desc,
+.osd-next {
+  font-size: clamp(11px, 1.0vw, 13px) !important;
+}
+
+#bottom-guide-bar {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: var(--pc-guide-h) !important;
+  padding: 0 12px !important;
+  box-sizing: border-box !important;
+}
+.guide-bar-inner {
+  gap: 6px !important;
+  overflow-x: auto !important;
+}
+.guide-btn {
+  font-size: 12px !important;
+  padding: 4px 7px !important;
+  margin-right: 4px !important;
+}
+.color-dot {
+  width: 10px !important;
+  height: 10px !important;
+  margin-right: 5px !important;
+}
+.key-cap {
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  margin-right: 4px !important;
+}
+
+#rich-toast {
+  position: fixed !important;
+  top: 52px !important;
+  right: 14px !important;
+  min-width: 240px !important;
+  max-width: min(440px, 88vw) !important;
+  padding: 10px 14px !important;
+  border-left-width: 5px !important;
+  border-radius: 8px !important;
+}
+.toast-title {
+  font-size: 14px !important;
+}
+.toast-detail {
+  font-size: 12px !important;
+}
+
+#similar-list-box {
+  position: fixed !important;
+  top: 14px !important;
+  left: 14px !important;
+  width: clamp(260px, 32vw, 380px) !important;
+}
+.sim-input-header {
+  padding: 8px 12px !important;
+}
+.sim-digits {
+  font-size: 22px !important;
+}
+.sim-item {
+  font-size: 13px !important;
+  padding: 7px 10px !important;
+}
+.sim-ch-logo {
+  height: 20px !important;
+  max-width: 44px !important;
+  width: auto !important;
+  object-fit: contain !important;
+}
+
+/* =========================================================================
+ * 5. スクロールバー・カーソル・右上 PC クイックバー
+ * ========================================================================= */
+#drawer-body::-webkit-scrollbar,
+#epg-grid-scroll::-webkit-scrollbar,
+#rec-main-list::-webkit-scrollbar,
+#rec-sidebar::-webkit-scrollbar,
+#comment-log-list::-webkit-scrollbar,
+.guide-bar-inner::-webkit-scrollbar {
+  width: 7px;
+  height: 6px;
+}
+#drawer-body::-webkit-scrollbar-thumb,
+#epg-grid-scroll::-webkit-scrollbar-thumb,
+#rec-main-list::-webkit-scrollbar-thumb,
+#rec-sidebar::-webkit-scrollbar-thumb,
+#comment-log-list::-webkit-scrollbar-thumb,
+.guide-bar-inner::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+}
+
+.focusable,
+.nav-tab,
+.btn-action,
+.ch-card,
+.tver-card,
+.rec-item-card,
+.epg-cell,
+.guide-btn {
+  cursor: pointer !important;
+}
+input.tver-input,
+input.rec-search-input {
+  cursor: text !important;
+  user-select: text;
+}
+
+#pc-quick-bar {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 9990;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100vw - 24px);
+  padding: 5px 8px;
+  background: rgba(16, 18, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  color: #f3f4f6;
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.20s ease;
+}
+
+#pc-quick-bar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#pc-quick-bar button {
+  background: rgba(255, 255, 255, 0.10);
+  color: #f3f4f6;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#pc-quick-bar button:hover {
+  background: #cf0652;
+  border-color: #ff4d8d;
+}
+
+#pc-vol-slider {
+  width: 72px;
+  accent-color: #cf0652;
+  cursor: pointer;
+}
+
+#pc-vol-label {
+  font-size: 12px;
+  min-width: 38px;
+  text-align: right;
+  color: #cbd5e1;
+}
