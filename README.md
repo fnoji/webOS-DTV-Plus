@@ -1,4 +1,10 @@
-# DTV Plus for LG webOS
+# DTV Plus
+
+<img width="1920" height="1080" alt="lgtv_20261120_203113" src="https://github.com/user-attachments/assets/e76f368a-9e3e-4692-8ccd-2646857a2cf7" />
+
+LGTV webOS 4での動作表示
+
+---
 
 LG webOS 搭載 TV で [Mirakurun](https://github.com/Chinachu/Mirakurun) / [EPGStation](https://github.com/l3tnun/EPGStation) と連携し、
 **地デジ・BS・CS・BS4K の視聴、録画予約、録画済みライブラリの再生** を 1 つのアプリで行うためのフロントエンド（メディアクライアント）アプリケーションです。
@@ -8,9 +14,12 @@ LG webOS 搭載 TV で [Mirakurun](https://github.com/Chinachu/Mirakurun) / [EPG
 さらに本アプリは **PC のブラウザ上でも WebUI として動作**します。TV 側と同等の UI をプライベートネットワーク上で利用でき、
 PC 側で設定した内容を LGTV へ送信する設定同期機能も備えています。**LGTV を所持していない環境でも PC 単体で動作**します。
 
-> 本アプリは webOS 4（Chromium 53 / ES5）環境での動作を主目的として設計されています。
+> 本アプリは webOS 4（Chromium 53 / ES5）環境での動作とLGTVの純正UIに準拠して設計されています。
 > 実装上の制約から `gap` / `grid` / `inset` / `@layer` などのモダン CSS や `Promise` / `fetch` をあえて使用しておらず、
 > 結果として PC 上では非常に軽量に動作する WebUI クライアントになっています。
+
+原則として、自分のメディア視聴用に製作しています。バグ等を発見した場合はissue等にて報告ください。
+
 
 ---
 
@@ -18,8 +27,14 @@ PC 側で設定した内容を LGTV へ送信する設定同期機能も備え�
 
 ### 地デジ / BS / CS
 
+<img width="1920" height="1080" alt="lgtv_20261120_203944" src="https://github.com/user-attachments/assets/e5961bfc-5a04-4504-bcf0-9b647727b9af" />
+
+LGTV webOS 4での動作表示
+
+---
+
 - Mirakurun サーバーを指定し、それを経由してコピーフリー環境で視聴できます。
-- 当方が提供している **webOS DTV Tuner Bridge** を実行している LGTV の場合は、
+- 当方が提供している [**webOS DTV Tuner Bridge**](https://github.com/fnoji/webOS-DTV-Tuner-Bridge) を実行している LGTV の場合は、
   接続先に `localhost` を指定することで **TV 内蔵チューナーから直接再生**できます。
 - **NX-jikkyo** 経由でニコニコ実況に対応しています（実装は [KonomiTV](https://github.com/tsukumijima/KonomiTV) を参考にしています）。
 - LG 純正 TV アプリ準拠の **3 桁選局番号**・ワンタッチ選局（shortCut 1〜12）に対応し、LG 純正の局ロゴ（`/mnt/lg/user/jlogo`）も補完表示します。
@@ -27,14 +42,26 @@ PC 側で設定した内容を LGTV へ送信する設定同期機能も備え�
 
 ### BS4K
 
-- BS4K に対応した Mirakurun サーバーを指定し、それを経由してコピーフリー環境で視聴できます。
+<img width="1920" height="1080" alt="lgtv_20261120_204030" src="https://github.com/user-attachments/assets/9fc65f33-3ee6-48f2-84b5-594e541cce09" />
+
+LGTV webOS 4での動作表示
+
+---
+
+- 設定よりBS4Kを有効化後、BS4K に対応した Mirakurun サーバーを指定し、それを経由してコピーフリー環境で視聴できます。
 - 動作確認済みの環境は **PIX-SMB400** を Mirakurun 対応にしたものを経由した構成です。
 - BS4K の MMT/TLV ストリームは同梱の `mmt2ts`（ARIB STD-B32 / STD-B60 準拠のリマキサー）で
   HEVC + AAC の MPEG-2 TS へ**リアルタイム無劣化変換**して再生します。
 
 ### 試験的対応: TVer / ABEMA
 
-- webOS 4 環境では TVer / ABEMA の公式アプリが提供されていません。本アプリで再生・視聴が可能になります。
+<img width="1920" height="1080" alt="lgtv_20261120_204236" src="https://github.com/user-attachments/assets/c635a193-bb34-4b01-8c80-28445b03dfd5" />
+
+LGTV webOS 4での動作表示
+
+---
+
+- webOS 4 環境では TVer / ABEMA の公式アプリが提供されていません。本アプリの設定より、TVerとABEMAを有効化するこによって再生・視聴が可能になります。
 - 双方で **VOD** と **ライブ配信** に対応しています。
 - **ABEMA** は番組表表示に対応し、TV 側の EPG 情報と合わせたユーザーインターフェースで動作します。
 - 受信されるコメントは放送波受信と同様のインターフェースで**ニコニコ実況風**に確認できます。
@@ -68,10 +95,16 @@ PC 側で設定した内容を LGTV へ送信する設定同期機能も備え�
 ### 字幕・データ放送（ARIB）
 
 - **ARIB STD-B24 字幕 / 文字スーパー**を Canvas 描画（aribb24.js）で表示します。
-- **BML データ放送**（[web-bml](https://github.com/tsukumijima/web-bml)）に対応し、L 字画面（動画縮小）連動・4 色キー / 十字 / 決定 / 戻る / 数字キー操作・双方向通信に対応します。
+- **BML データ放送**（[web-bml](https://github.com/tsukumijima/web-bml)）に対応し、L 字画面（動画縮小）連動・4 色キー / 十字 / 決定 / 戻る / 数字キー操作・双方向通信に対応します。（が、試験対応です。KonomiTVの実装を参考にしています。）
 - 字幕・データ放送の解析はバックエンドデーモンのサイドバンド API から取得します。
 
 ### PC WebUI モード
+
+<img width="865" height="566" alt="スクリーンショット 2026-11-20 203305" src="https://github.com/user-attachments/assets/9a701765-2bc8-488a-8224-a2c4712ac66b" />
+
+PC WebUIでの表示
+
+---
 
 - PC のブラウザ上で TV 側と同等の UI を実行できます。
 - 放送波は `ffmpeg` による **GPU ハードウェアエンコード**（NVENC / QSV / AMF、無い場合は libx264）でブラウザへ配信します。
