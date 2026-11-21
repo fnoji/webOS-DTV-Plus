@@ -6,6 +6,42 @@
   'use strict';
 
   var DAEMON_PROXY = 'http://127.0.0.1:7019/api/epgstation/proxy?target=';
+  var DAEMON_DURATION_PROBE = 'http://127.0.0.1:7019/api/recorded/duration?target=';
+
+  // 完了済み動画ファイルの実尺 (秒) インメモリキャッシュ: key -> durationSec
+  var videoDurationCache = {};
+
+  function pickPrimaryVideoFile(recItem) {
+    var vFiles = (recItem && recItem.videoFiles) || [];
+    if (vFiles.length === 0) return null;
+    for (var i = 0; i < vFiles.length; i++) {
+      if (vFiles[i].type === 'encoded') return vFiles[i];
+    }
+    for (var j = 0; j < vFiles.length; j++) {
+      if (vFiles[j].type === 'ts') return vFiles[j];
+    }
+    return vFiles[0];
+  }
+
+  function makeDurationCacheKey(baseUrl, videoFile) {
+    if (!baseUrl || !videoFile || !videoFile.id) return '';
+    return normalizeBaseUrl(baseUrl) + '|' + String(videoFile.id) + '|' + String(Number(videoFile.size) || 0);
+  }
+
+  function getCachedVideoDuration(baseUrl, recItem) {
+    if (!recItem || recItem.isRecording) return 0;
+    var vf = pickPrimaryVideoFile(recItem);
+    var key = makeDurationCacheKey(baseUrl || recItem.serverUrl, vf);
+    return (key && videoDurationCache[key] > 0) ? videoDurationCache[key] : 0;
+  }
+
+  function setCachedVideoDuration(baseUrl, recItem, sec) {
+    var s = Math.round(Number(sec) || 0);
+    if (s <= 0 || !recItem || recItem.isRecording) return;
+    var vf = pickPrimaryVideoFile(recItem);
+    var key = makeDurationCacheKey(baseUrl || recItem.serverUrl, vf);
+    if (key) videoDurationCache[key] = s;
+  }
 
   // ARIB STD-B10 大分類ジャンル名テーブル
   var GENRE_NAMES = {
@@ -233,7 +269,7 @@
   function normalizeRecordedRecord(base, r, channelMap) {
     var startMs = Number(r.startAt) || 0;
     var endMs = Number(r.endAt) || 0;
-    var durSec = endMs > startMs ? Math.round((endMs - startMs) / 1000) : 0;
+    var epgDurSec = endMs > startMs ? Math.round((endMs - startMs) / 1000) : 0;
     var chInfo = (channelMap && channelMap[r.channelId]) || null;
 
     var thumbs = r.thumbnails || [];
@@ -248,6 +284,9 @@
       if (vFiles[i].type === 'encoded') hasEncoded = true;
       if (vFiles[i].type === 'ts') hasTs = true;
     }
+
+    var cachedRealDur = (!r.isRecording) ? getCachedVideoDuration(base, { serverUrl: base, isRecording: false, videoFiles: vFiles }) : 0;
+    var durSec = cachedRealDur > 0 ? cachedRealDur : epgDurSec;
 
     var chIdNum = Number(r.channelId) || 0;
     var nidNum = chInfo ? chInfo.networkId : (chIdNum >= 100000 ? Math.floor(chIdNum / 100000) : 0);
@@ -269,6 +308,8 @@
       extended: r.extended || '',
       startAt: startMs,
       endAt: endMs,
+      epgDurationSec: epgDurSec,
+      realDurationSec: cachedRealDur,
       durationSec: durSec,
       genre1: r.genre1,
       genreLabel: getGenreName(r.genre1),
@@ -537,6 +578,68 @@
     };
   }
 
+  /**
+   * 録画ファイルの実動画長 (秒) を取得する。
+   * 1) 完了済みファイルはサイズ付きキーでインメモリキャッシュから即時返却
+   * 2) EPGStation v2 標準 API (/api/videos/{id}/duration) を優先照会
+   * 3) BS4K (MMT/TLV) 等で EPGStation 側が 500 エラーを返す場合は、
+   *    ローカルデーモンの /api/recorded/duration (Range 先頭/末尾 PCR 差分・サイズ推定) へフォールバック
+   */
+  function fetchRealDuration(baseUrl, recItem, callback) {
+    var base = normalizeBaseUrl(baseUrl || (recItem && recItem.serverUrl));
+    var vf = pickPrimaryVideoFile(recItem);
+    if (!base || !vf || !vf.id) {
+      if (callback) callback('動画ファイル情報なし', 0);
+      return;
+    }
+    var cached = getCachedVideoDuration(base, recItem);
+    if (cached > 0) {
+      if (callback) callback(null, cached);
+      return;
+    }
+
+    function probeFallback() {
+      var videoUrl = base + '/api/videos/' + vf.id;
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', DAEMON_DURATION_PROBE + encodeURIComponent(videoUrl), true);
+      xhr.timeout = 7000;
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          try {
+            var res = JSON.parse(xhr.responseText);
+            var sec = res && res.ok ? Math.round(Number(res.durationSec) || 0) : 0;
+            if (sec > 0) {
+              setCachedVideoDuration(base, recItem, sec);
+              if (callback) callback(null, sec);
+              return;
+            }
+          } catch (e) {}
+        }
+        if (callback) callback('実尺取得失敗', 0);
+      };
+      xhr.onerror = xhr.ontimeout = function () {
+        if (callback) callback('実尺取得失敗', 0);
+      };
+      try {
+        xhr.send();
+      } catch (eSend) {
+        if (callback) callback('実尺取得失敗', 0);
+      }
+    }
+
+    var durApiUrl = base + '/api/videos/' + vf.id + '/duration';
+    requestJson('GET', durApiUrl, null, 6000, function (err, data) {
+      var rawDur = (!err && data && data.duration !== undefined) ? Number(data.duration) : 0;
+      if (isFinite(rawDur) && rawDur > 0) {
+        var sec = Math.max(1, Math.round(rawDur));
+        setCachedVideoDuration(base, recItem, sec);
+        if (callback) callback(null, sec);
+        return;
+      }
+      probeFallback();
+    });
+  }
+
   global.EpgStationClient = {
     normalizeBaseUrl: normalizeBaseUrl,
     getGenreName: getGenreName,
@@ -551,6 +654,9 @@
     deleteReserve: deleteReserve,
     stopRecording: stopRecording,
     deleteRecorded: deleteRecorded,
-    buildPlaybackSource: buildPlaybackSource
+    buildPlaybackSource: buildPlaybackSource,
+    fetchRealDuration: fetchRealDuration,
+    getCachedVideoDuration: getCachedVideoDuration,
+    setCachedVideoDuration: setCachedVideoDuration
   };
 })(window);

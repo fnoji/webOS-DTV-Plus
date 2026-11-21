@@ -1036,7 +1036,7 @@
       if (until > state.bmlBurstUntilMs) {
         state.bmlBurstUntilMs = until;
       }
-      if (!state.activeStream) return;
+      if (!state.activeStream || !state.isLiveStream) return;
       if (!state.bmlActive && (!state.bmlPrefetchEnabled || state.bmlHasDataComponent === false)) return;
       if (!state.bmlXhr && !state.bmlDecodingBusy) {
         if (state.bmlPollTimer) {
@@ -1192,16 +1192,19 @@
         state.cachedPmt = msg;
         var prevHasBml = state.bmlHasDataComponent;
         var hasBml = false;
-        var comps = msg.components || [];
-        for (var i = 0; i < comps.length; i++) {
-          if (comps[i].streamType === 0x0D || comps[i].bxmlInfo) {
-            hasBml = true;
-            break;
+        // 録画再生時 (!isLiveStream) はデータ放送 (BML) を無効化し、ARIB 字幕・文字スーパーのみを有効にする
+        if (state.isLiveStream) {
+          var comps = msg.components || [];
+          for (var i = 0; i < comps.length; i++) {
+            if (comps[i].streamType === 0x0D || comps[i].bxmlInfo) {
+              hasBml = true;
+              break;
+            }
           }
         }
         state.bmlHasDataComponent = hasBml;
-        // 事前読み込みバッファが ON の場合のみ、選局直後からバックグラウンドで DSM-CC カルーセルを先読みする
-        if (hasBml && state.bmlPrefetchEnabled && state.activeStream && !state.bmlActive && !state.bmlPrefetchStarted) {
+        // ライブ視聴かつ事前読み込みバッファが ON の場合のみ、選局直後からバックグラウンドで DSM-CC カルーセルを先読みする
+        if (hasBml && state.isLiveStream && state.bmlPrefetchEnabled && state.activeStream && !state.bmlActive && !state.bmlPrefetchStarted) {
           state.bmlPrefetchStarted = true;
           state.bmlPrefetchStartedAt = Date.now();
           scheduleNextBmlPoll(1100);
@@ -1209,7 +1212,9 @@
         if (prevHasBml !== hasBml) {
           onStateChange(getPublicStatus());
         }
-        return true;
+        return state.isLiveStream;
+      } else if (!state.isLiveStream) {
+        return false;
       } else if (msg.type === 'bit') {
         var sameBit = !!(state.cachedBit && state.cachedBit.originalNetworkId === msg.originalNetworkId);
         state.cachedBit = msg;
@@ -1617,14 +1622,14 @@
 
     function scheduleNextBmlPoll(delayMs) {
       if (state.bmlPollTimer) clearTimeout(state.bmlPollTimer);
-      if (!state.activeStream) return;
+      if (!state.activeStream || !state.isLiveStream) return;
       if (!state.bmlActive && (!state.bmlPrefetchEnabled || state.bmlHasDataComponent === false)) return;
       state.bmlPollTimer = setTimeout(pollBmlCarouselOnce, delayMs);
     }
 
     function pollBmlCarouselOnce() {
       state.bmlPollTimer = null;
-      if (!state.activeStream) return;
+      if (!state.activeStream || !state.isLiveStream) return;
       if (!state.bmlActive && (!state.bmlPrefetchEnabled || state.bmlHasDataComponent === false)) return;
       if (state.bmlXhr || state.bmlDecodingBusy || !state.cachedPmt) {
         // PMT を未受信またはデコード中のうちは少し待ってから再試行
@@ -1829,7 +1834,11 @@
         return false;
       }
       if (!state.activeStream) {
-        onToast('info', 'データ放送を利用できません', 'テレビ放送またはTS録画の再生中に [d] ボタンを押してください');
+        onToast('info', 'データ放送を利用できません', 'テレビ放送の視聴中に [d] ボタンを押してください');
+        return false;
+      }
+      if (!state.isLiveStream) {
+        onToast('info', '録画再生中はデータ放送を利用できません', '');
         return false;
       }
       if (state.bmlHasDataComponent === false) {
@@ -2487,7 +2496,7 @@
           state.bmlPrefetchStarted = false;
         }
       } else {
-        if (state.activeStream && !state.bmlActive && state.bmlHasDataComponent === true && !isAllListedModulesCached()) {
+        if (state.activeStream && state.isLiveStream && !state.bmlActive && state.bmlHasDataComponent === true && !isAllListedModulesCached()) {
           state.bmlPrefetchStarted = true;
           state.bmlPrefetchStartedAt = Date.now();
           scheduleNextBmlPoll(250);
@@ -2507,7 +2516,7 @@
         captionEnabled: state.captionEnabled,
         bmlPrefetchEnabled: state.bmlPrefetchEnabled,
         bmlActive: state.bmlActive,
-        bmlHasDataComponent: state.bmlHasDataComponent,
+        bmlHasDataComponent: state.isLiveStream ? state.bmlHasDataComponent : false,
         bmlWantsNumeric: wantsNum
       };
     }

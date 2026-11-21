@@ -592,7 +592,7 @@
     if (!st && aribManager) st = aribManager.getStatus();
     var capOn = st ? !!st.captionEnabled : !!state.settings.captionEnabled;
     var bmlOn = st ? !!st.bmlActive : false;
-    var hasBmlData = !!(st && st.activeStream && st.bmlHasDataComponent === true);
+    var hasBmlData = !!(st && st.activeStream && state.mode === 'LIVE' && st.bmlHasDataComponent === true);
     var subText = '字幕: ' + (capOn ? 'ON' : 'OFF');
     if (dom.labelSub) dom.labelSub.textContent = subText;
     if (dom.labelBmlSub) dom.labelBmlSub.textContent = subText;
@@ -650,6 +650,10 @@
 
   function toggleDataBroadcast() {
     if (!aribManager) return;
+    if (state.mode === 'RECORDED') {
+      showRichToast('info', '録画再生中はデータ放送を利用できません', '');
+      return;
+    }
     if (state.drawerOpen) {
       setDrawerOpen(false);
     }
@@ -2039,6 +2043,9 @@
         if (res.durationSec > 0) {
           recItem.realDurationSec = res.durationSec;
           recItem.durationSec = res.durationSec;
+          if (window.EpgStationClient && typeof window.EpgStationClient.setCachedVideoDuration === 'function') {
+            window.EpgStationClient.setCachedVideoDuration(recItem.serverUrl, recItem, res.durationSec);
+          }
         }
         if (res.sizeBytes > 0 && recItem.videoFiles && recItem.videoFiles.length > 0) {
           for (var i = 0; i < recItem.videoFiles.length; i++) {
@@ -4497,6 +4504,7 @@
   }
 
   function closeRecordedOverlay() {
+    recDurationProbeSeq++;
     state.recOverlayOpen = false;
     dom.recOverlay.className = 'hidden';
     wakeBottomGuide();
@@ -5155,7 +5163,107 @@
     }
   }
 
+  var recDurationProbeSeq = 0;
+  var recCardDurationRefs = {};
+
+  /**
+   * 録画一覧・詳細モーダル用の長さ表記を生成する
+   * - 1分未満: 「14秒」
+   * - 10分未満: 「1分17秒」「5分19秒」（途中録画・短尺の実尺を正確に視認できるように秒まで表示）
+   * - 10分以上: 「45分」「60分」
+   */
+  function formatRecordedDurationLabel(sec) {
+    var s = Math.round(Number(sec) || 0);
+    if (s <= 0) return '';
+    if (s < 60) return s + '秒';
+    if (s < 600) {
+      var m = Math.floor(s / 60);
+      var rem = s % 60;
+      return m + '分' + (rem < 10 ? '0' : '') + rem + '秒';
+    }
+    return Math.round(s / 60) + '分';
+  }
+
+  function makeRecCardRefKey(item) {
+    if (!item) return '';
+    return String(item.serverUrl || '') + '|' + String(item.id || '');
+  }
+
+  function applyRealDurationToRecItem(item, realSec) {
+    var sec = Math.round(Number(realSec) || 0);
+    if (!item || sec <= 0) return;
+    item.realDurationSec = sec;
+    item.durationSec = sec;
+    var ref = recCardDurationRefs[makeRecCardRefKey(item)];
+    if (ref) {
+      if (ref.durTag) {
+        ref.durTag.textContent = formatRecordedDurationLabel(sec);
+        ref.durTag.style.display = '';
+      }
+      if (ref.rBadge && ref.resumePos > 5) {
+        ref.rBadge.textContent = '▶ 続き: ' + formatSec(ref.resumePos) + ' / ' + formatSec(sec);
+      }
+    }
+  }
+
+  /**
+   * 録画一覧に表示中の EPGStation 録画データの実動画長 (秒) を軽量キュー (最大並列3) で取得し、
+   * EPG 番組枠長ではなく実際の録画長を各カードへ反映する。
+   * 途中録画で EPG 枠とファイルサイズが乖離していそうな項目を優先して解決する。
+   */
+  function startRecordedListDurationProbe(items) {
+    recDurationProbeSeq++;
+    var mySeq = recDurationProbeSeq;
+    if (!state.recOverlayOpen || !items || items.length === 0) return;
+    if (!window.EpgStationClient || typeof window.EpgStationClient.fetchRealDuration !== 'function') return;
+
+    var queue = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it || it.isReserveEntry || it.isSavedVodEntry || it.isMediaServerItem) continue;
+      if (!it.videoFiles || it.videoFiles.length === 0) continue;
+      if (it.realDurationSec > 0 && !it.isRecording) continue;
+      var epgSec = Number(it.epgDurationSec || it.durationSec || 0);
+      var bytes = Number(it.totalBytes || 0);
+      // 放送波の標準ビットレート (約1.5〜2.5MB/s) に対して極端に小さいファイルは途中録画の可能性が高いので最優先
+      var likelyPartial = (epgSec > 0 && bytes > 0 && (bytes / epgSec) < 900000);
+      queue.push({ item: it, priority: likelyPartial ? 0 : 1, order: i });
+    }
+    if (queue.length === 0) return;
+
+    queue.sort(function (a, b) {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.order - b.order;
+    });
+
+    var nextIdx = 0;
+    var active = 0;
+    var maxConc = 3;
+
+    function pump() {
+      if (mySeq !== recDurationProbeSeq || !state.recOverlayOpen) return;
+      while (active < maxConc && nextIdx < queue.length) {
+        var entry = queue[nextIdx++];
+        active++;
+        (function (recItem) {
+          var srvBase = recItem.serverUrl || state.settings.epgstationUrl;
+          window.EpgStationClient.fetchRealDuration(srvBase, recItem, function (err, realSec) {
+            active--;
+            if (mySeq !== recDurationProbeSeq || !state.recOverlayOpen) return;
+            if (!err && realSec > 0) {
+              applyRealDurationToRecItem(recItem, realSec);
+            }
+            pump();
+          });
+        })(entry.item);
+      }
+    }
+    pump();
+  }
+
   function renderRecMainList() {
+    recDurationProbeSeq++;
+    recCardDurationRefs = {};
     dom.recMainList.innerHTML = '';
     dom.recPagerBar.innerHTML = '';
 
@@ -5207,10 +5315,13 @@
           noImg.textContent = item.isReserveEntry ? '予約待機' : 'NO IMAGE';
           thumbWrap.appendChild(noImg);
         }
-        if (item.durationSec > 0) {
-          var durTag = document.createElement('span');
+        var durTag = null;
+        if (item.durationSec > 0 || (!item.isReserveEntry && !item.isSavedVodEntry && item.videoFiles && item.videoFiles.length > 0)) {
+          durTag = document.createElement('span');
           durTag.className = 'rec-thumb-dur';
-          durTag.textContent = Math.max(1, Math.round(item.durationSec / 60)) + '分';
+          var durLbl = formatRecordedDurationLabel(item.durationSec);
+          durTag.textContent = durLbl;
+          if (!durLbl) durTag.style.display = 'none';
           thumbWrap.appendChild(durTag);
         }
         card.appendChild(thumbWrap);
@@ -5274,14 +5385,22 @@
 
         var descDiv = document.createElement('div');
         descDiv.className = 'rec-card-desc';
+        var rBadge = null;
         var resumePos = (!item.isReserveEntry && !item.isSavedVodEntry) ? findRecordedResumeSec(item.id) : 0;
         if (resumePos > 5) {
-          var rBadge = document.createElement('span');
+          rBadge = document.createElement('span');
           rBadge.className = 'resume-pill';
           rBadge.style.marginRight = '12px';
           rBadge.style.marginTop = '0';
           rBadge.textContent = '▶ 続き: ' + formatSec(resumePos) + ' / ' + formatSec(item.durationSec);
           descDiv.appendChild(rBadge);
+        }
+        if (!item.isReserveEntry && !item.isSavedVodEntry && !item.isMediaServerItem) {
+          recCardDurationRefs[makeRecCardRefKey(item)] = {
+            durTag: durTag,
+            rBadge: rBadge,
+            resumePos: resumePos
+          };
         }
         var dText = document.createElement('span');
         dText.textContent = item.description || '番組概要なし';
@@ -5308,6 +5427,8 @@
         dom.recMainList.appendChild(card);
       })(state.recItems[i], i);
     }
+
+    startRecordedListDurationProbe(state.recItems);
 
     // ページネーション描画 (十字キーだけで上部バー・前ページ・次ページすべてに到達可能)
     var totalPages = Math.max(1, Math.ceil((state.recTotalCount || state.recItems.length) / REC_PAGE_SIZE));
@@ -5595,12 +5716,18 @@
     }
 
     // 3. EPGStation 録画済み番組
+    function buildEpgRecordedDetailText(recObj) {
+      var durText = formatRecordedDurationLabel(recObj.durationSec) || '0分';
+      return (
+        '放送局: ' + recObj.channelName + '  /  日時: ' + formatYmdHm(recObj.startAt) +
+        ' (' + durText + ' / ' + (recObj.sizeLabel || '') + ')\n\n' +
+        (recObj.description || '') +
+        (recObj.extended ? ('\n\n' + recObj.extended) : '')
+      );
+    }
+
     var resumeSec = findRecordedResumeSec(item.id);
-    var detailText =
-      '放送局: ' + item.channelName + '  /  日時: ' + formatYmdHm(item.startAt) +
-      ' (' + Math.max(1, Math.round((item.durationSec || 0) / 60)) + '分 / ' + (item.sizeLabel || '') + ')\n\n' +
-      (item.description || '') +
-      (item.extended ? ('\n\n' + item.extended) : '');
+    var detailText = buildEpgRecordedDetailText(item);
 
     var btns = [];
     if (resumeSec > 5) {
@@ -5648,6 +5775,18 @@
     btns.push({ label: '閉じる' });
 
     openModal('録画番組詳細・再生', item.name, detailText, btns);
+
+    if ((!item.realDurationSec || item.isRecording) &&
+        window.EpgStationClient && typeof window.EpgStationClient.fetchRealDuration === 'function') {
+      var modalTitleSnap = item.name;
+      window.EpgStationClient.fetchRealDuration(item.serverUrl || state.settings.epgstationUrl, item, function (err, realSec) {
+        if (err || !(realSec > 0)) return;
+        applyRealDurationToRecItem(item, realSec);
+        if (state.modalOpen && dom.modalTitle && dom.modalTitle.textContent === modalTitleSnap && dom.modalBody) {
+          dom.modalBody.textContent = buildEpgRecordedDetailText(item);
+        }
+      });
+    }
   }
 
   (function bindRecOverlayToolbar() {
