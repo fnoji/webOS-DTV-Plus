@@ -18,6 +18,7 @@ import json
 import os
 import queue
 import re
+import select
 import socket
 import ssl
 import struct
@@ -3102,6 +3103,85 @@ class TSSidebandHub:
             return hdr + payload
 
 
+def _force_close_upstream(up):
+    """
+    別スレッドで read() ブロック中の urllib レスポンスソケットを即座に強制切断する。
+    単なる up.close() では Windows/Linux で read() 中のソケット解放が遅れるため、
+    配下の生ソケットへ shutdown(SHUT_RDWR) + close() を発行して上流チューナーを確実に解放する。
+    """
+    if up is None:
+        return
+    try:
+        raw_fp = getattr(up, "fp", None)
+        raw_obj = getattr(raw_fp, "raw", None)
+        sock_obj = getattr(raw_obj, "_sock", None) or getattr(raw_fp, "_sock", None)
+        if sock_obj is not None:
+            try:
+                sock_obj.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            try:
+                sock_obj.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        up.close()
+    except Exception:
+        pass
+
+
+def _start_client_disconnect_watcher(conn, stop_ev, on_disconnect):
+    """
+    クライアント TCP ソケットの切断 (FIN / RST / CLOSE_WAIT) を select + MSG_PEEK で監視する。
+    ffmpeg / tsreadex / mmt2ts の stdout.read() や上流 read() でブロックしている最中に
+    ブラウザ側がチャンネル切替・タブ閉鎖しても 0.35 秒以内に確実に切断検知し、
+    ゾンビプロセスや TV チューナー占有を防止する。
+    """
+    if conn is None:
+        return None
+
+    def _watch():
+        while not stop_ev.is_set():
+            try:
+                rlist, _, xlist = select.select([conn], [], [conn], 0.35)
+                if stop_ev.is_set():
+                    return
+                if xlist:
+                    stop_ev.set()
+                    try:
+                        on_disconnect()
+                    except Exception:
+                        pass
+                    return
+                if rlist:
+                    peek = conn.recv(1, socket.MSG_PEEK)
+                    if not peek:
+                        stop_ev.set()
+                        try:
+                            on_disconnect()
+                        except Exception:
+                            pass
+                        return
+                    # まれに次リクエスト等が並んでいた場合のビジーループ回避
+                    stop_ev.wait(0.25)
+            except OSError:
+                if not stop_ev.is_set():
+                    stop_ev.set()
+                    try:
+                        on_disconnect()
+                    except Exception:
+                        pass
+                return
+            except Exception:
+                return
+
+    th = threading.Thread(target=_watch, daemon=True)
+    th.start()
+    return th
+
+
 SIDEBAND_HUB = TSSidebandHub()
 
 
@@ -3700,13 +3780,32 @@ class DaemonHandler(BaseHTTPRequestHandler):
         if up is None:
             raise last_err or RuntimeError("upstream stream open failed")
 
+        stop_ev = threading.Event()
+        proc_holder = [None]
+
+        def _cleanup_pipe():
+            _force_close_upstream(up)
+            p = proc_holder[0]
+            if p is not None:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+
+        # first_chunk 待機中からパイプ完了まで一貫してクライアント切断 (FIN/RST/CLOSE_WAIT) を監視する
+        _start_client_disconnect_watcher(self.connection, stop_ev, _cleanup_pipe)
+
         # 先頭チャンクを少し読んで生 MMT/TLV (BS4K: 0x7F TLVチェーン) か通常 MPEG-2 TS かを自動判別する
-        first_chunk = up.read(32768)
+        try:
+            first_chunk = up.read(32768)
+        except Exception:
+            first_chunk = b""
+        if stop_ev.is_set():
+            _cleanup_pipe()
+            return
         if not first_chunk:
-            try:
-                up.close()
-            except Exception:
-                pass
+            stop_ev.set()
+            _cleanup_pipe()
             return self._send_json({"error": "empty upstream stream"}, 502)
 
         def _detect_mmt_tlv(buf):
@@ -3754,6 +3853,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
 
         # BS4K (MMT/TLV -> HEVC/H.265 + AAC-ADTS MPEG-2 TS リアルタイム無劣化リマックス)
         if is_mmt_tlv and os.path.exists(mmt2ts_bin):
+            if stop_ev.is_set():
+                _cleanup_pipe()
+                return
             cmd = [mmt2ts_bin]
             if explicit_sid and int(explicit_sid) > 0:
                 cmd.extend(["--sid", str(int(explicit_sid))])
@@ -3764,12 +3866,20 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 stderr=subprocess.DEVNULL,
                 bufsize=0,
             )
+            proc_holder[0] = proc
+            if stop_ev.is_set():
+                _cleanup_pipe()
+                try:
+                    proc.wait(timeout=2)
+                except Exception:
+                    pass
+                return
 
             def feed_mmt():
                 try:
                     proc.stdin.write(first_chunk)
                     read_fn = getattr(up, "read1", up.read)
-                    while True:
+                    while not stop_ev.is_set():
                         data = read_fn(65536)
                         if not data:
                             break
@@ -3781,10 +3891,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
                         proc.stdin.close()
                     except Exception:
                         pass
-                    try:
-                        up.close()
-                    except Exception:
-                        pass
+                    _force_close_upstream(up)
 
             feeder = threading.Thread(target=feed_mmt, daemon=True)
             feeder.start()
@@ -3793,18 +3900,15 @@ class DaemonHandler(BaseHTTPRequestHandler):
                     self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 except Exception:
                     pass
-                while True:
+                while not stop_ev.is_set():
                     out_chunk = proc.stdout.read(65536)
                     if not out_chunk:
                         break
                     self.wfile.write(out_chunk)
             finally:
+                stop_ev.set()
+                _cleanup_pipe()
                 try:
-                    up.close()
-                except Exception:
-                    pass
-                try:
-                    proc.kill()
                     proc.wait(timeout=2)
                 except Exception:
                     pass
@@ -3813,6 +3917,9 @@ class DaemonHandler(BaseHTTPRequestHandler):
         sb_session = SIDEBAND_HUB.begin_session(target_url, explicit_sid, range_start_byte)
 
         if os.path.exists(tsreadex_bin):
+            if stop_ev.is_set():
+                _cleanup_pipe()
+                return
             proc = subprocess.Popen(
                 [
                     tsreadex_bin,
@@ -3829,6 +3936,14 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 stderr=subprocess.DEVNULL,
                 bufsize=0,
             )
+            proc_holder[0] = proc
+            if stop_ev.is_set():
+                _cleanup_pipe()
+                try:
+                    proc.wait(timeout=2)
+                except Exception:
+                    pass
+                return
 
             def feed_ts():
                 try:
@@ -3837,7 +3952,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
                     proc.stdin.write(first_chunk)
-                    while True:
+                    while not stop_ev.is_set():
                         data = up.read(65536)
                         if not data:
                             break
@@ -3853,26 +3968,20 @@ class DaemonHandler(BaseHTTPRequestHandler):
                         proc.stdin.close()
                     except Exception:
                         pass
-                    try:
-                        up.close()
-                    except Exception:
-                        pass
+                    _force_close_upstream(up)
 
             feeder = threading.Thread(target=feed_ts, daemon=True)
             feeder.start()
             try:
-                while True:
+                while not stop_ev.is_set():
                     out_chunk = proc.stdout.read(65536)
                     if not out_chunk:
                         break
                     self.wfile.write(out_chunk)
             finally:
+                stop_ev.set()
+                _cleanup_pipe()
                 try:
-                    up.close()
-                except Exception:
-                    pass
-                try:
-                    proc.kill()
                     proc.wait(timeout=2)
                 except Exception:
                     pass
@@ -3883,7 +3992,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
                 self.wfile.write(first_chunk)
-                while True:
+                while not stop_ev.is_set():
                     chunk = up.read(65536)
                     if not chunk:
                         break
@@ -3893,10 +4002,8 @@ class DaemonHandler(BaseHTTPRequestHandler):
                         pass
                     self.wfile.write(chunk)
             finally:
-                try:
-                    up.close()
-                except Exception:
-                    pass
+                stop_ev.set()
+                _cleanup_pipe()
 
     def _send_json(self, obj, status=200):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")

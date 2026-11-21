@@ -609,10 +609,17 @@ class PcDaemonHandler(yd.DaemonHandler):
                 except Exception:
                     pass
 
+        def _cleanup_abema_proc():
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
         th = threading.Thread(target=feeder, daemon=True)
         th.start()
+        yd._start_client_disconnect_watcher(self.connection, stop_ev, _cleanup_abema_proc)
         try:
-            while True:
+            while not stop_ev.is_set():
                 out_chunk = proc.stdout.read(65536)
                 if not out_chunk:
                     break
@@ -622,8 +629,8 @@ class PcDaemonHandler(yd.DaemonHandler):
             pass
         finally:
             stop_ev.set()
+            _cleanup_abema_proc()
             try:
-                proc.kill()
                 proc.wait(timeout=2)
             except Exception:
                 pass
@@ -668,12 +675,31 @@ class PcDaemonHandler(yd.DaemonHandler):
         if up is None:
             raise last_err or RuntimeError("upstream stream open failed")
 
-        first_chunk = up.read(32768)
+        stop_ev = threading.Event()
+        proc_holder = [None]
+
+        def _cleanup_stream():
+            yd._force_close_upstream(up)
+            p = proc_holder[0]
+            if p is not None:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+
+        # first_chunk 待機中からパイプ完了まで一貫してクライアント切断 (FIN/RST/CLOSE_WAIT) を監視する
+        yd._start_client_disconnect_watcher(self.connection, stop_ev, _cleanup_stream)
+
+        try:
+            first_chunk = up.read(32768)
+        except Exception:
+            first_chunk = b""
+        if stop_ev.is_set():
+            _cleanup_stream()
+            return
         if not first_chunk:
-            try:
-                up.close()
-            except Exception:
-                pass
+            stop_ev.set()
+            _cleanup_stream()
             return self._send_json({"error": "empty upstream stream"}, 502)
 
         is_mmt_tlv = (stream_mode == "bs4k") or _detect_mmt_tlv_buf(first_chunk)
@@ -721,6 +747,9 @@ class PcDaemonHandler(yd.DaemonHandler):
         ])
 
         sb_session = None if is_mmt_tlv else yd.SIDEBAND_HUB.begin_session(target_url, explicit_sid, range_start_byte)
+        if stop_ev.is_set():
+            _cleanup_stream()
+            return
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -729,7 +758,14 @@ class PcDaemonHandler(yd.DaemonHandler):
             bufsize=0,
             creationflags=0x08000000 if os.name == "nt" else 0,
         )
-        stop_ev = threading.Event()
+        proc_holder[0] = proc
+        if stop_ev.is_set():
+            _cleanup_stream()
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                pass
+            return
 
         def feeder():
             remuxer = Mmt2TsRemuxer(explicit_sid) if is_mmt_tlv else None
@@ -820,15 +856,12 @@ class PcDaemonHandler(yd.DaemonHandler):
                     proc.stdin.close()
                 except Exception:
                     pass
-                try:
-                    up.close()
-                except Exception:
-                    pass
+                yd._force_close_upstream(up)
 
         th = threading.Thread(target=feeder, daemon=True)
         th.start()
         try:
-            while True:
+            while not stop_ev.is_set():
                 out_chunk = proc.stdout.read(65536)
                 if not out_chunk:
                     break
@@ -838,12 +871,8 @@ class PcDaemonHandler(yd.DaemonHandler):
             pass
         finally:
             stop_ev.set()
+            _cleanup_stream()
             try:
-                up.close()
-            except Exception:
-                pass
-            try:
-                proc.kill()
                 proc.wait(timeout=2)
             except Exception:
                 pass
