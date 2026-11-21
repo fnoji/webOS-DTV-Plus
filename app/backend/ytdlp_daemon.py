@@ -2769,6 +2769,7 @@ class TSSidebandFilter:
     })
 
     def __init__(self, target_sid=0):
+        self.lock = threading.Lock()
         self.rem = b""
         self.target_sid = int(target_sid or 0)
         self.pmt_pids = set()
@@ -2777,7 +2778,9 @@ class TSSidebandFilter:
         self.pcr_pids = set()
         self.pmt_ready = False
         self.pmt_secs = {}
-        self.last_pcr_ts = 0.0
+        self.last_pcr_sec = None
+        self.latest_pcr_sec = None
+        self.first_pcr_emitted = False
         self.eit_keep = False
 
     def _extract_psi_payload(self, pkt):
@@ -2847,96 +2850,115 @@ class TSSidebandFilter:
         self.pmt_ready = True
 
     def process_split(self, data):
-        buf = self.rem + data
-        n = len(buf)
-        i = 0
-        base_out = bytearray()
-        bml_out = bytearray()
-        now_ts = time.monotonic()
-        while i + 188 <= n:
-            if buf[i] != 0x47:
-                sync = buf.find(0x47, i + 1)
-                if sync == -1:
-                    i = n
-                    break
-                i = sync
-                continue
-            pkt = buf[i : i + 188]
-            i += 188
-            pid = ((pkt[1] & 0x1F) << 8) | pkt[2]
-            if pid == 0x1FFF:
-                continue
+        with self.lock:
+            buf = self.rem + data
+            n = len(buf)
+            i = 0
+            base_out = bytearray()
+            bml_out = bytearray()
+            while i + 188 <= n:
+                if buf[i] != 0x47:
+                    sync = buf.find(0x47, i + 1)
+                    if sync == -1:
+                        i = n
+                        break
+                    i = sync
+                    continue
+                pkt = buf[i : i + 188]
+                i += 188
+                pid = ((pkt[1] & 0x1F) << 8) | pkt[2]
+                if pid == 0x1FFF:
+                    continue
 
-            if pid == 0x0000:
-                pusi, pay = self._extract_psi_payload(pkt)
-                if pusi and len(pay) > 1:
-                    ptr = pay[0]
-                    if 1 + ptr < len(pay):
-                        self._parse_pat_section(pay[1 + ptr :])
-                base_out.extend(pkt)
-                continue
-
-            if pid in self.pmt_pids:
-                pusi, pay = self._extract_psi_payload(pkt)
-                if pusi and len(pay) > 1:
-                    ptr = pay[0]
-                    sec_buf = bytearray(pay[1 + ptr :])
-                    self.pmt_secs[pid] = sec_buf
-                    if len(sec_buf) >= 3:
-                        slen = ((sec_buf[1] & 0x0F) << 8) | sec_buf[2]
-                        if len(sec_buf) >= 3 + slen:
-                            self._parse_pmt_section(sec_buf)
-                elif pid in self.pmt_secs and pay:
-                    sec_buf = self.pmt_secs[pid]
-                    sec_buf.extend(pay)
-                    if len(sec_buf) >= 3:
-                        slen = ((sec_buf[1] & 0x0F) << 8) | sec_buf[2]
-                        if len(sec_buf) >= 3 + slen:
-                            self._parse_pmt_section(sec_buf)
-                            del self.pmt_secs[pid]
-                base_out.extend(pkt)
-                continue
-
-            if pid == 0x0012:
-                # H-EIT のうち BML が使う現在/次の番組情報 (table_id == 0x4E) のみ通し、巨大な週間EPG (0x50..0x6F) はカット
-                pusi, pay = self._extract_psi_payload(pkt)
-                if pusi and len(pay) > 1:
-                    ptr = pay[0]
-                    prev_keep = self.eit_keep
-                    new_keep = False
-                    if 1 + ptr < len(pay):
-                        new_keep = (pay[1 + ptr] == 0x4E)
-                    self.eit_keep = new_keep
-                    if new_keep or (prev_keep and ptr > 0):
-                        base_out.extend(pkt)
-                elif self.eit_keep:
+                if pid == 0x0000:
+                    pusi, pay = self._extract_psi_payload(pkt)
+                    if pusi and len(pay) > 1:
+                        ptr = pay[0]
+                        if 1 + ptr < len(pay):
+                            self._parse_pat_section(pay[1 + ptr :])
                     base_out.extend(pkt)
-                continue
+                    continue
 
-            if pid in self.SI_PIDS or pid in self.caption_pids:
-                base_out.extend(pkt)
-                continue
+                if pid in self.pmt_pids:
+                    pusi, pay = self._extract_psi_payload(pkt)
+                    if pusi and len(pay) > 1:
+                        ptr = pay[0]
+                        sec_buf = bytearray(pay[1 + ptr :])
+                        self.pmt_secs[pid] = sec_buf
+                        if len(sec_buf) >= 3:
+                            slen = ((sec_buf[1] & 0x0F) << 8) | sec_buf[2]
+                            if len(sec_buf) >= 3 + slen:
+                                self._parse_pmt_section(sec_buf)
+                    elif pid in self.pmt_secs and pay:
+                        sec_buf = self.pmt_secs[pid]
+                        sec_buf.extend(pay)
+                        if len(sec_buf) >= 3:
+                            slen = ((sec_buf[1] & 0x0F) << 8) | sec_buf[2]
+                            if len(sec_buf) >= 3 + slen:
+                                self._parse_pmt_section(sec_buf)
+                                del self.pmt_secs[pid]
+                    base_out.extend(pkt)
+                    continue
 
-            if pid in self.bml_pids:
-                # MPEG-2 TS の Continuity Counter 連続性を 100% 保つためパケット欠損なしでそのまま通す
-                bml_out.extend(pkt)
-                continue
+                if pid == 0x0012:
+                    # H-EIT のうち BML が使う現在/次の番組情報 (table_id == 0x4E) のみ通し、巨大な週間EPG (0x50..0x6F) はカット
+                    pusi, pay = self._extract_psi_payload(pkt)
+                    if pusi and len(pay) > 1:
+                        ptr = pay[0]
+                        prev_keep = self.eit_keep
+                        new_keep = False
+                        if 1 + ptr < len(pay):
+                            new_keep = (pay[1 + ptr] == 0x4E)
+                        self.eit_keep = new_keep
+                        if new_keep or (prev_keep and ptr > 0):
+                            base_out.extend(pkt)
+                    elif self.eit_keep:
+                        base_out.extend(pkt)
+                    continue
 
-            if pid in self.pcr_pids or not self.pmt_ready:
-                b3 = pkt[3]
-                if (b3 & 0x20) and pkt[4] >= 7 and (pkt[5] & 0x10):
-                    # PCR 同期は 0.25秒に 1回で十分正確なため間引き
-                    if (now_ts - self.last_pcr_ts) >= 0.25:
-                        self.last_pcr_ts = now_ts
-                        base_out.extend(pkt[0:3])
-                        base_out.append((b3 & 0xCF) | 0x20)
-                        base_out.append(183)
-                        base_out.append(0x10)
-                        base_out.extend(pkt[6:12])
-                        base_out.extend(b"\xff" * 176)
+                if pid in self.SI_PIDS or pid in self.caption_pids:
+                    base_out.extend(pkt)
+                    continue
 
-        self.rem = buf[i:]
-        return bytes(base_out), bytes(bml_out)
+                if pid in self.bml_pids:
+                    # MPEG-2 TS の Continuity Counter 連続性を 100% 保つためパケット欠損なしでそのまま通す
+                    bml_out.extend(pkt)
+                    continue
+
+                if self.pmt_ready and pid in self.pcr_pids:
+                    b3 = pkt[3]
+                    if (b3 & 0x20) and pkt[4] >= 7 and (pkt[5] & 0x10):
+                        pcr_base = (
+                            (pkt[6] << 25)
+                            | (pkt[7] << 17)
+                            | (pkt[8] << 9)
+                            | (pkt[9] << 1)
+                            | (pkt[10] >> 7)
+                        )
+                        pcr_sec = pcr_base / 90000.0
+                        self.latest_pcr_sec = pcr_sec
+                        emit_pcr = False
+                        if not self.first_pcr_emitted or self.last_pcr_sec is None:
+                            emit_pcr = True
+                        else:
+                            dp = pcr_sec - self.last_pcr_sec
+                            if dp < -40000.0:
+                                dp += (1 << 33) / 90000.0
+                            # 壁時計ではなくストリーム内 PCR 基準で 0.20秒ごとに間引く (録画先読み時も正確な PCR を維持)
+                            if dp >= 0.20 or dp < -0.5:
+                                emit_pcr = True
+                        if emit_pcr:
+                            self.first_pcr_emitted = True
+                            self.last_pcr_sec = pcr_sec
+                            base_out.extend(pkt[0:3])
+                            base_out.append((b3 & 0xCF) | 0x20)
+                            base_out.append(183)
+                            base_out.append(0x10)
+                            base_out.extend(pkt[6:12])
+                            base_out.extend(b"\xff" * 176)
+
+            self.rem = buf[i:]
+            return bytes(base_out), bytes(bml_out)
 
 
 class TSSidebandHub:
@@ -2947,8 +2969,8 @@ class TSSidebandHub:
     の 2 ストリームで保持し、必要な系統のみを低負荷でクライアントへ供給するハブ。
     """
 
-    MAX_BASE_BYTES = 524288    # 512 KB
-    MAX_BML_BYTES = 1600000    # 1.6 MB (カルーセル最新約2周分のみ保持し古い重複を抑制)
+    MAX_BASE_BYTES = 2097152   # 2 MB (録画再生時の先読みバーストでも字幕PESを取りこぼさない十分な余裕)
+    MAX_BML_BYTES = 4194304    # 4 MB (BSの大型データ放送カルーセル 1〜2周分を欠損なく保持)
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -3029,6 +3051,13 @@ class TSSidebandHub:
                     old_s, old_e, _ = self.bml_chunks.popleft()
                     self.bml_buffered -= (old_e - old_s)
 
+    def get_latest_pcr_sec(self, session_id):
+        """指定セッションの直近ストリーム PCR (秒) を返す (録画ペーシング用)"""
+        with self.lock:
+            if session_id != self.session_id or self.ts_filter is None:
+                return None
+            return self.ts_filter.latest_pcr_sec
+
     def read_since(self, req_session, cursor, mode="base"):
         with self.lock:
             cur_sess = self.session_id
@@ -3045,7 +3074,7 @@ class TSSidebandHub:
                 cursor = earliest
             parts = []
             total_sent = 0
-            max_read = (188 * 1600) if is_bml else (188 * 800)
+            max_read = (188 * 2400) if is_bml else (188 * 800)
             next_cursor = cursor
             for s_off, e_off, data in chunks:
                 if e_off <= cursor:
@@ -3109,6 +3138,7 @@ SYNCABLE_SETTING_KEYS = {
     "jikkyoFontSize",
     "jikkyoOpacity",
     "captionEnabled",
+    "bmlPrefetchEnabled",
     "enableRecordingMode",
     "epgstationUrl",
     "epgstationReadOnly",
@@ -3714,8 +3744,7 @@ class DaemonHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self._cors()
         self.send_header("Content-Type", "video/mp2t")
-        if range_start_byte <= 0:
-            self.send_header("Accept-Ranges", "none")
+        self.send_header("Accept-Ranges", "none")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         try:

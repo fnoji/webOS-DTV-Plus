@@ -163,17 +163,22 @@ def _build_ffmpeg_video_args(encoder, is_bs4k_downscale=False, quality="high"):
     - high   : ローカル標準 (GR/BS/CS は 1080p 60p 8Mbps / BS4K 変換時は 1080p 8Mbps)
     - medium : 外出先 Wi-Fi / Tailscale 標準 (720p 30p 3Mbps)
     - mobile : モバイル回線・省データ (540p 30p 1.5Mbps)
+    ※ 番組境界や CM 境界での解像度・SAR 変化 (1440x1080 <-> 1920x1080 <-> 720x480 等) による
+       MSE (mpegts.js) 映像フリーズを防ぐため、全プリセットで DAR 補正＋固定解像度＋SAR=1:1 へ正規化する。
     """
     q = quality if quality in ("high", "medium", "mobile") else "high"
     if q == "mobile":
-        vf = "scale=960:540" if is_bs4k_downscale else "bwdif=mode=0:parity=-1:deint=0,scale=960:540"
+        norm = "scale=trunc(iw*sar/2)*2:ih,scale=960:540:force_original_aspect_ratio=decrease,pad=960:540:(ow-iw)/2:(oh-ih)/2,setsar=1"
+        vf = norm if is_bs4k_downscale else f"bwdif=mode=0:parity=-1:deint=0,{norm}"
         br, maxr, bufs, gop, cq = "1500k", "2200k", "4400k", "60", "27"
     elif q == "medium":
-        vf = "scale=1280:720" if is_bs4k_downscale else "bwdif=mode=0:parity=-1:deint=0,scale=1280:720"
+        norm = "scale=trunc(iw*sar/2)*2:ih,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1"
+        vf = norm if is_bs4k_downscale else f"bwdif=mode=0:parity=-1:deint=0,{norm}"
         br, maxr, bufs, gop, cq = "3000k", "4500k", "9000k", "60", "25"
     else:
-        # 日本の放送波 (1080i) は bwdif=mode=1 (60p 高画質デインターレース) でちらつきを完全に防ぐ
-        vf = "scale=1920:1080" if is_bs4k_downscale else "bwdif=mode=1:parity=-1:deint=0"
+        # 日本の放送波 (1080i) は bwdif=mode=1 (60p 高画質デインターレース) + 1920x1080 SAR=1:1 単一 SPS 出力
+        norm = "scale=trunc(iw*sar/2)*2:ih,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1"
+        vf = norm if is_bs4k_downscale else f"bwdif=mode=1:parity=-1:deint=0,{norm}"
         br, maxr, bufs, gop, cq = "8M", "12M", "16M", "120", "22"
 
     if encoder == "h264_nvenc":
@@ -307,8 +312,10 @@ class PcDaemonHandler(yd.DaemonHandler):
             raw = f.read()
         if inject_pc:
             txt = raw.decode("utf-8", errors="replace")
+            ts = int(time.time())
+            # PC版 Chrome (--app) のリロード時に app/js/*.js・app/css/*.css が古いキャッシュのまま残らないよう自動バスト
+            txt = re.sub(r'(src|href)="((?:js|css)/[^"?]+)"', rf'\1="\2?v={ts}"', txt)
             if "</head>" in txt:
-                ts = int(time.time())
                 snippet = (
                     f'\n  <link rel="stylesheet" href="/pc/pc_style.css?v={ts}">\n'
                     f'  <script src="/pc/vendor/mpegts.min.js"></script>\n'
@@ -621,12 +628,15 @@ class PcDaemonHandler(yd.DaemonHandler):
             except Exception:
                 pass
 
-    def _pipe_pc_stream(self, target_url, range_start_byte=0, explicit_sid=0, stream_mode="", bs4k_codec="hevc", quality="high"):
+    def _pipe_pc_stream(self, target_url, range_start_byte=0, explicit_sid=0, stream_mode="", bs4k_codec="hevc", quality="high", is_recorded=False):
         """
         PC Chrome (mpegts.js) 向けの放送波・録画ストリーミング処理:
         - BS4K (MMT/TLV): Mmt2TsRemuxer で HEVC+AAC TS 化 (quality=high かつ codec=hevc なら映像無劣化、
           リモート省帯域モードや codec=h264 なら GPU H.264 変換)
         - GR/BS/CS (MPEG-2 TS): SIDEBAND_HUB へ分岐しつつ ffmpeg GPU エンコードで H.264+AAC MPEG-TS 出力
+        - 録画再生 (is_recorded=True): 初期 8秒分をバースト供給して高速起動した後、ストリーム PCR 基準で
+          リアルタイム 1.0x にペーシングし、Chrome MSE Video SourceBuffer 溢れによる映像停止と
+          SIDEBAND_HUB 溢れによる字幕欠落を完全に防ぐ。
         """
         req_headers = {
             "User-Agent": "DTVPlus-PC/0.3",
@@ -685,7 +695,8 @@ class PcDaemonHandler(yd.DaemonHandler):
 
         cmd = [
             FFMPEG_BIN, "-hide_banner", "-loglevel", "error",
-            "-fflags", "+discardcorrupt",
+            "-fflags", "+discardcorrupt+genpts",
+            "-err_detect", "ignore_err",
             "-analyzeduration", "2000000",
             "-probesize", "3000000",
             "-f", "mpegts",
@@ -704,6 +715,7 @@ class PcDaemonHandler(yd.DaemonHandler):
             "-b:a", audio_br,
             "-ac", "2",
             "-ar", "48000",
+            "-mpegts_flags", "+resend_headers",
             "-f", "mpegts",
             "pipe:1",
         ])
@@ -717,22 +729,67 @@ class PcDaemonHandler(yd.DaemonHandler):
             bufsize=0,
             creationflags=0x08000000 if os.name == "nt" else 0,
         )
+        stop_ev = threading.Event()
 
         def feeder():
             remuxer = Mmt2TsRemuxer(explicit_sid) if is_mmt_tlv else None
+            # 録画再生用 PCR ペーシング状態: 初期 8.0秒バースト供給後、現在再生位置の +8.0秒先を維持
+            rec_lead_sec = 8.0
+            pcr_wrap_sec = (1 << 33) / 90000.0
+            pcr_origin = None
+            pcr_prev = None
+            pcr_accum = 0.0
+            wall_origin = None
+
+            def pace_if_recorded(cur_pcr):
+                nonlocal pcr_origin, pcr_prev, pcr_accum, wall_origin
+                if not is_recorded or cur_pcr is None:
+                    return
+                now_m = time.monotonic()
+                if pcr_origin is None:
+                    pcr_origin = cur_pcr
+                    pcr_prev = cur_pcr
+                    pcr_accum = 0.0
+                    wall_origin = now_m
+                    return
+                dp = cur_pcr - pcr_prev
+                if dp < -40000.0:
+                    dp += pcr_wrap_sec
+                elif dp > 40000.0:
+                    dp -= pcr_wrap_sec
+                pcr_prev = cur_pcr
+                if 0.0 <= dp <= 30.0:
+                    pcr_accum += dp
+                else:
+                    # 番組境界等の PCR 不連続ジャンプ時は現在リードを維持して再アンカー
+                    cur_wall = now_m - wall_origin
+                    pcr_accum = max(0.0, min(cur_wall + rec_lead_sec, pcr_accum))
+                while not stop_ev.is_set() and proc.poll() is None:
+                    wall_elapsed = time.monotonic() - wall_origin
+                    ahead = pcr_accum - wall_elapsed
+                    if ahead <= rec_lead_sec:
+                        break
+                    stop_ev.wait(min(0.25, ahead - rec_lead_sec + 0.02))
+
             try:
                 if remuxer:
                     o0 = remuxer.feed(first_chunk)
                     if o0:
                         proc.stdin.write(o0)
+                        if is_recorded:
+                            ps = yd.DaemonHandler._extract_ts_pcrs(o0)
+                            if ps:
+                                pace_if_recorded(ps[-1])
                 else:
                     try:
                         yd.SIDEBAND_HUB.feed(sb_session, first_chunk)
                     except Exception:
                         pass
                     proc.stdin.write(first_chunk)
+                    if is_recorded:
+                        pace_if_recorded(yd.SIDEBAND_HUB.get_latest_pcr_sec(sb_session))
 
-                while True:
+                while not stop_ev.is_set() and proc.poll() is None:
                     data = read_fn(65536)
                     if not data:
                         break
@@ -740,13 +797,19 @@ class PcDaemonHandler(yd.DaemonHandler):
                         out = remuxer.feed(data)
                         if out:
                             proc.stdin.write(out)
+                            if is_recorded:
+                                ps = yd.DaemonHandler._extract_ts_pcrs(out)
+                                if ps:
+                                    pace_if_recorded(ps[-1])
                     else:
                         try:
                             yd.SIDEBAND_HUB.feed(sb_session, data)
                         except Exception:
                             pass
                         proc.stdin.write(data)
-                if remuxer:
+                        if is_recorded:
+                            pace_if_recorded(yd.SIDEBAND_HUB.get_latest_pcr_sec(sb_session))
+                if remuxer and not stop_ev.is_set():
                     tail = remuxer.flush()
                     if tail:
                         proc.stdin.write(tail)
@@ -774,6 +837,7 @@ class PcDaemonHandler(yd.DaemonHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
         finally:
+            stop_ev.set()
             try:
                 up.close()
             except Exception:
@@ -977,7 +1041,7 @@ class PcDaemonHandler(yd.DaemonHandler):
                 if offset_sec > 1.0 and dur_sec > 5.0 and total_size > 18800:
                     ratio = max(0.0, min(0.992, offset_sec / dur_sec))
                     start_byte = (int(ratio * total_size) // 188) * 188
-                return self._pipe_pc_stream(target, start_byte, explicit_sid, stream_mode, bs4k_codec, quality)
+                return self._pipe_pc_stream(target, start_byte, explicit_sid, stream_mode, bs4k_codec, quality, is_recorded=True)
 
             if path.startswith("/pc/"):
                 rel = path[len("/pc/"):]

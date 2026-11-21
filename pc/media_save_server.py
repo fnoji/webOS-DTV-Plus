@@ -620,6 +620,7 @@ def _load_or_build_item(abs_path, base_dir):
         "ext": os.path.splitext(abs_path)[1].lower(),
         "episodeId": fn_meta["episodeId"],
         "provider": provider,
+        "sourceUrl": _resolve_official_source_url(provider, fn_meta["episodeId"], source_url),
         "genre": genre,
         "series": series,
         "title": title,
@@ -2511,12 +2512,36 @@ def _serialize_job(j):
     }
 
 
+def _resolve_official_source_url(provider, episode_id, explicit_url=""):
+    """保存済み動画 (TVer / ABEMA) の公式ページ URL を解決する (QRコード・外部リンク用)"""
+    u = str(explicit_url or "").strip()
+    if u.startswith("http://") or u.startswith("https://"):
+        return u
+    prov = str(provider or "").strip().upper()
+    ep = str(episode_id or "").strip()
+    if not ep:
+        return ""
+    if prov == "TVER" or re.match(r"^ep[a-z0-9]{6,}$", ep, re.I):
+        return f"https://tver.jp/episodes/{urllib.parse.quote(ep, safe='')}"
+    if prov == "ABEMA":
+        if re.search(r"_s\d+_p\d+", ep, re.I):
+            return f"https://abema.tv/video/episode/{urllib.parse.quote(ep, safe='_-')}"
+        if re.match(r"^[a-z0-9][a-z0-9_-]{1,40}$", ep, re.I):
+            return f"https://abema.tv/now-on-air/{urllib.parse.quote(ep, safe='_-')}"
+    return ""
+
+
 def _public_item(item, origin):
     return {
         "id": item["id"],
         "fileName": item["fileName"],
         "episodeId": item["episodeId"],
         "provider": item["provider"],
+        "sourceUrl": _resolve_official_source_url(
+            item.get("provider"),
+            item.get("episodeId"),
+            item.get("sourceUrl") or "",
+        ),
         "genre": item.get("genre") or "その他",
         "series": item["series"],
         "title": item["title"],

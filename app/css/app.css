@@ -95,10 +95,63 @@ html, body {
   height: 1080px;
   overflow: hidden;
   z-index: 6;
+  touch-action: manipulation;
 }
 
 #bml-overlay.hidden {
   display: none;
+}
+
+#bml-overlay.bml-pointer-hit,
+#bml-overlay.bml-pointer-hit * {
+  cursor: pointer !important;
+}
+
+.bml-tap-ripple {
+  position: fixed;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  margin-top: -17px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 196, 255, 0.92);
+  background-color: rgba(0, 196, 255, 0.22);
+  pointer-events: none;
+  z-index: 30;
+  -webkit-transform: scale(0.55);
+  transform: scale(0.55);
+  opacity: 0.95;
+  -webkit-transition: -webkit-transform 0.24s ease-out, opacity 0.24s ease-out;
+  transition: transform 0.24s ease-out, opacity 0.24s ease-out;
+}
+
+.bml-tap-ripple.expand {
+  -webkit-transform: scale(1.45);
+  transform: scale(1.45);
+  opacity: 0;
+}
+
+.bml-dpad-group .bml-nav-btn {
+  min-width: 48px;
+  justify-content: center;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-weight: bold;
+  touch-action: manipulation;
+}
+
+.bml-dpad-group .bml-ok-btn {
+  background-color: #cf0652;
+  border-color: #ff4d8d;
+  color: #ffffff;
+  font-weight: bold;
+  padding-left: 18px;
+  padding-right: 18px;
+  touch-action: manipulation;
+}
+
+.bml-dpad-group .bml-ok-btn:hover {
+  background-color: #e61666;
 }
 
 .bml-stage {
@@ -133,6 +186,66 @@ html, body {
   white-space: nowrap;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
   z-index: 15;
+}
+
+/* LG純正風: 選局初回の右下「d データ」通知アイコン (データ放送ありチャンネルのみ) */
+.bml-avail-badge {
+  position: absolute;
+  right: 46px;
+  bottom: 108px;
+  z-index: 12;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  padding: 8px 18px 8px 10px;
+  border-radius: 10px;
+  background-color: rgba(14, 18, 26, 0.86);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.72);
+  color: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  -webkit-transition: opacity 0.28s ease, -webkit-transform 0.28s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease;
+  -webkit-transform: translateY(10px);
+  transform: translateY(10px);
+}
+.bml-avail-badge.visible {
+  opacity: 1;
+  pointer-events: auto;
+  -webkit-transform: translateY(0);
+  transform: translateY(0);
+}
+.bml-avail-badge:hover {
+  border-color: #38bdf8;
+  background-color: rgba(20, 32, 52, 0.94);
+}
+.bml-avail-d {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  line-height: 32px;
+  text-align: center;
+  border-radius: 7px;
+  background-color: #1d4ed8;
+  border: 2px solid #93c5fd;
+  color: #ffffff;
+  font-size: 23px;
+  font-weight: bold;
+  font-family: Georgia, "Times New Roman", serif;
+  margin-right: 10px;
+}
+.bml-avail-txt {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #f8fafc;
+}
+.pill-badge.bml-avail-pill {
+  background-color: #1e3a8a;
+  color: #e0f2fe;
+  border: 1px solid rgba(147, 197, 253, 0.55);
 }
 
 .bml-input-overlay {

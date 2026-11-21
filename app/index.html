@@ -56,6 +56,12 @@
     <div id="sim-list-body" class="sim-list-body"></div>
   </div>
 
+  <!-- 3c. LG純正風 データ放送あり通知アイコン (選局初回のみ右下に数秒表示 / クリックで起動) -->
+  <div id="bml-avail-badge" class="bml-avail-badge hidden" title="データ放送を開く (d)">
+    <span class="bml-avail-d">d</span>
+    <span class="bml-avail-txt">データ</span>
+  </div>
+
   <!-- 4. 下部 OSD 番組情報バナー -->
   <div id="osd-banner">
     <div class="osd-top-row">
@@ -67,6 +73,7 @@
       <div class="osd-badges">
         <span id="osd-rec-btn" class="pill-badge rec-btn">● 録画予約</span>
         <span id="osd-mode-badge" class="pill-badge live">LIVE TS</span>
+        <span id="osd-bml-badge" class="pill-badge bml-avail-pill" style="display:none;">データd</span>
         <span id="osd-sub-badge" class="pill-badge">字幕: OFF</span>
         <span id="osd-audio-badge" class="pill-badge">音声: 主音声</span>
         <span id="osd-jk-badge" class="pill-badge jk">実況: --</span>
@@ -240,18 +247,34 @@
           <span class="color-dot dot-yellow"></span><span>黄</span>
         </div>
       </div>
+      <div class="guide-group bml-dpad-group">
+        <div class="guide-btn bml-nav-btn" id="btn-bml-left" title="左へ移動">◀</div>
+        <div class="guide-btn bml-nav-btn" id="btn-bml-up" title="上へ移動">▲</div>
+        <div class="guide-btn bml-nav-btn" id="btn-bml-down" title="下へ移動">▼</div>
+        <div class="guide-btn bml-nav-btn" id="btn-bml-right" title="右へ移動">▶</div>
+        <div class="guide-btn bml-ok-btn" id="btn-bml-ok" title="決定">決定</div>
+      </div>
+      <div class="guide-group bml-num-group" id="bml-num-group" style="display:none;">
+        <div class="guide-btn bml-nav-btn" data-bml-digit="1">1</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="2">2</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="3">3</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="4">4</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="5">5</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="6">6</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="7">7</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="8">8</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="9">9</div>
+        <div class="guide-btn bml-nav-btn" data-bml-digit="0">0</div>
+      </div>
       <div class="guide-group">
-        <div class="guide-btn">
-          <span class="key-cap">十字/決定</span><span>項目選択</span>
+        <div class="guide-btn" id="btn-bml-back">
+          <span class="key-cap">戻る</span><span>前の画面</span>
         </div>
         <div class="guide-btn" id="btn-bml-sub">
           <span class="key-cap">字幕</span><span id="label-bml-sub">字幕: OFF</span>
         </div>
-        <div class="guide-btn" id="btn-bml-back">
-          <span class="key-cap">戻る</span><span>前の画面</span>
-        </div>
         <div class="guide-btn" id="btn-bml-close">
-          <span class="key-cap key-cap-bml">d</span><span>データ放送を閉じる</span>
+          <span class="key-cap key-cap-bml">d</span><span>閉じる</span>
         </div>
       </div>
     </div>

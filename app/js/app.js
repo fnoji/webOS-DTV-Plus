@@ -1,5 +1,5 @@
 /* -*- coding: utf-8 -*-
- * app.js - DTV Plus メインアプリケーションコントローラ
+ * app.js - DTV Plus メインアプリケーションコントローラ (v0.2.0)
  * - LG webOS 純正 DTV アプリ基調 UI & 55インチ大型文字対応
  * - 全動画配信抽出を TV内 chroot の公式 yt-dlp に一本化 (リモコン1クリック自己更新対応)
  * - TVer / Abema TV (試験的) 表示 ON/OFF 切替
@@ -36,6 +36,7 @@
     jikkyoFontSize: 'xlarge',
     jikkyoOpacity: 0.70,
     captionEnabled: false,    // ARIB 字幕・文字スーパー表示 ON/OFF
+    bmlPrefetchEnabled: true, // データ放送 (BML) カルーセル事前読み込みバッファ ON/OFF (デフォルトON)
     enableRecordingMode: false, // 初期設定は視聴専用モード
     epgstationUrl: '',
     epgstationReadOnly: true,
@@ -334,6 +335,7 @@
     abemaLiveSort: 'channel', // 'channel' | 'popular'
     mediaSavedIdMap: {},
     mediaActiveIdMap: {},
+    mediaItemSourceMap: {},
 
     // モーダル状態
     modalButtons: [],
@@ -406,6 +408,9 @@
     osdTimer: null,
     toastTimer: null,
     guideTimer: null,
+    bmlAvailTimer: null,
+    bmlAvailNotifiedKey: '',
+    bmlStreamSeq: 0,
     tuneTimeoutTimer: null,
     vodWatchdogTimer: null,
     lastWheelTime: 0,
@@ -426,6 +431,7 @@
     bmlContent: document.getElementById('bml-content'),
     bmlInputOverlay: document.getElementById('bml-input-overlay'),
     bmlStatusBadge: document.getElementById('bml-status-badge'),
+    bmlAvailBadge: document.getElementById('bml-avail-badge'),
     standby: document.getElementById('standby-placeholder'),
     standbyMsg: document.getElementById('standby-msg'),
     danmaku: document.getElementById('danmaku-layer'),
@@ -443,6 +449,7 @@
     osdChName: document.getElementById('osd-ch-name'),
     osdRecBtn: document.getElementById('osd-rec-btn'),
     osdModeBadge: document.getElementById('osd-mode-badge'),
+    osdBmlBadge: document.getElementById('osd-bml-badge'),
     osdSubBadge: document.getElementById('osd-sub-badge'),
     osdAudioBadge: document.getElementById('osd-audio-badge'),
     osdJkBadge: document.getElementById('osd-jk-badge'),
@@ -525,11 +532,15 @@
         bmlInputEl: dom.bmlInputOverlay,
         bmlStatusBadgeEl: dom.bmlStatusBadge,
         initialCaptionEnabled: !!state.settings.captionEnabled,
+        initialBmlPrefetchEnabled: state.settings.bmlPrefetchEnabled !== false,
         onToast: function (type, title, detail) {
           showRichToast(type, title, detail);
         },
         onStateChange: function (st) {
           syncAribUiState(st);
+        },
+        onUserInteract: function () {
+          wakeBottomGuide();
         },
         onTuneRequest: function (onid, _tsid, sid) {
           var list = state.services || [];
@@ -544,13 +555,50 @@
       })
     : null;
 
+  function hideBmlAvailBadge() {
+    if (state.bmlAvailTimer) {
+      clearTimeout(state.bmlAvailTimer);
+      state.bmlAvailTimer = null;
+    }
+    if (dom.bmlAvailBadge) {
+      dom.bmlAvailBadge.className = 'bml-avail-badge hidden';
+    }
+  }
+
+  function showBmlAvailBadge(durationMs) {
+    if (!dom.bmlAvailBadge) return;
+    if (state.bmlAvailTimer) {
+      clearTimeout(state.bmlAvailTimer);
+      state.bmlAvailTimer = null;
+    }
+    dom.bmlAvailBadge.className = 'bml-avail-badge visible';
+    state.bmlAvailTimer = setTimeout(function () {
+      state.bmlAvailTimer = null;
+      if (dom.bmlAvailBadge) {
+        dom.bmlAvailBadge.className = 'bml-avail-badge';
+      }
+    }, durationMs || 5500);
+  }
+
+  if (dom.bmlAvailBadge) {
+    dom.bmlAvailBadge.onclick = function (e) {
+      if (e) e.stopPropagation();
+      hideBmlAvailBadge();
+      toggleDataBroadcast();
+    };
+  }
+
   function syncAribUiState(st) {
     if (!st && aribManager) st = aribManager.getStatus();
     var capOn = st ? !!st.captionEnabled : !!state.settings.captionEnabled;
     var bmlOn = st ? !!st.bmlActive : false;
+    var hasBmlData = !!(st && st.activeStream && st.bmlHasDataComponent === true);
     var subText = '字幕: ' + (capOn ? 'ON' : 'OFF');
     if (dom.labelSub) dom.labelSub.textContent = subText;
     if (dom.labelBmlSub) dom.labelBmlSub.textContent = subText;
+    if (dom.osdBmlBadge) {
+      dom.osdBmlBadge.style.display = hasBmlData ? '' : 'none';
+    }
     if (dom.osdSubBadge) {
       dom.osdSubBadge.textContent = subText;
       dom.osdSubBadge.style.backgroundColor = capOn ? '#0f766e' : '#2f333d';
@@ -563,13 +611,32 @@
       dom.guideNormalWrap.className = bmlOn ? 'guide-bar-inner hidden' : 'guide-bar-inner';
       dom.guideBmlWrap.className = bmlOn ? 'guide-bar-inner' : 'guide-bar-inner hidden';
     }
+    var bmlNumGroup = document.getElementById('bml-num-group');
+    if (bmlNumGroup) {
+      bmlNumGroup.style.display = (bmlOn && st && st.bmlWantsNumeric) ? '' : 'none';
+    }
     if (bmlOn) {
+      hideBmlAvailBadge();
       if (state.drawerOpen) setDrawerOpen(false);
       if (state.epgOpen) closeEpgGrid();
       if (state.recOverlayOpen) closeRecordedOverlay();
       if (state.similarOpen) closeSimilarList();
       hideOsdBanner();
       wakeBottomGuide();
+    } else {
+      // LG純正風: 選局初回のみ、データ放送ありチャンネルで右下に「d データ」通知アイコンを表示する
+      if (hasBmlData && state.mode !== 'IDLE') {
+        var curStreamKey = String(state.bmlStreamSeq);
+        if (state.bmlAvailNotifiedKey !== curStreamKey) {
+          state.bmlAvailNotifiedKey = curStreamKey;
+          showBmlAvailBadge(5500);
+        }
+      } else {
+        hideBmlAvailBadge();
+      }
+      if (state.mode !== 'IDLE') {
+        wakeBottomGuide();
+      }
     }
   }
 
@@ -715,15 +782,18 @@
 
   function closeModal() {
     state.modalOpen = false;
+    state.syncPromptOpen = false;
     dom.modalBackdrop.className = 'hidden';
   }
 
   function wakeBottomGuide() {
     dom.bottomGuide.className = '';
     if (state.guideTimer) clearTimeout(state.guideTimer);
-    if (!state.drawerOpen && !state.epgOpen && !state.recOverlayOpen) {
+    var isBmlOpen = !!(aribManager && aribManager.getStatus().bmlActive);
+    if (!state.drawerOpen && !state.epgOpen && !state.recOverlayOpen && !isBmlOpen) {
       state.guideTimer = setTimeout(function () {
-        if (!state.drawerOpen && !state.epgOpen && !state.recOverlayOpen && !state.osdVisible) {
+        var bmlStillOpen = !!(aribManager && aribManager.getStatus().bmlActive);
+        if (!state.drawerOpen && !state.epgOpen && !state.recOverlayOpen && !state.osdVisible && !bmlStillOpen) {
           dom.bottomGuide.className = 'auto-hidden';
         }
       }, 5500);
@@ -1188,6 +1258,45 @@
     return recItem;
   }
 
+  /**
+   * 配信保存済み動画 (ABEMA / TVer) の公式ページ URL を解決する (情報ポップアップ内 QR コード用)
+   * 放送波 (EPGStation 録画) は対象外のため空文字を返す。
+   */
+  function resolveSavedMediaQrUrl(recItem) {
+    if (!recItem || !recItem.isMediaServerItem) return '';
+    var mid = String(recItem.mediaItemId || (String(recItem.id || '').indexOf('ms_') === 0 ? String(recItem.id).slice(3) : ''));
+    var cached = (mid && state.mediaItemSourceMap && state.mediaItemSourceMap[mid]) ? state.mediaItemSourceMap[mid] : null;
+    var direct = String(recItem.sourceUrl || recItem.pageUrl || recItem.targetUrl || (cached && cached.sourceUrl) || '').trim();
+    if (direct.indexOf('http://') === 0 || direct.indexOf('https://') === 0) {
+      return direct;
+    }
+    var prov = String(recItem.provider || (cached && cached.provider) || '').toUpperCase();
+    var chName = String(recItem.channelName || '').toUpperCase();
+    if (!prov) {
+      if (chName.indexOf('TVER') !== -1) prov = 'TVER';
+      else if (chName.indexOf('ABEMA') !== -1) prov = 'ABEMA';
+    }
+    var epId = String(recItem.episodeId || (cached && cached.episodeId) || '').trim();
+    if (!epId) {
+      var fn = String(recItem.fileName || (cached && cached.fileName) || recItem.name || '');
+      var m = fn.match(/\[([^\[\]]+)\](?:\.[a-z0-9]{2,5})?$/i);
+      if (m && m[1]) epId = m[1].trim();
+    }
+    if (!epId) return '';
+    if (prov === 'TVER' || /^ep[a-z0-9]{6,}$/i.test(epId)) {
+      return 'https://tver.jp/episodes/' + encodeURIComponent(epId);
+    }
+    if (prov === 'ABEMA' || /_s\d+_p\d+/i.test(epId)) {
+      if (/_s\d+_p\d+/i.test(epId)) {
+        return 'https://abema.tv/video/episode/' + encodeURIComponent(epId);
+      }
+      if (/^[a-z0-9][a-z0-9_-]{1,40}$/i.test(epId)) {
+        return 'https://abema.tv/now-on-air/' + encodeURIComponent(epId);
+      }
+    }
+    return '';
+  }
+
   function recordRecordedHistory(recItem, posSec, durSec) {
     if (!recItem || !recItem.id) return;
     ensureMediaServerFields(recItem);
@@ -1222,6 +1331,10 @@
       isMediaServerItem: !!recItem.isMediaServerItem,
       mediaItemId: recItem.mediaItemId || '',
       directVideoUrl: recItem.directVideoUrl || '',
+      provider: recItem.provider || '',
+      episodeId: recItem.episodeId || '',
+      sourceUrl: recItem.sourceUrl || '',
+      fileName: recItem.fileName || '',
       hasEncoded: !!(recItem.hasEncoded || recItem.isMediaServerItem),
       sizeLabel: recItem.sizeLabel || '',
       genre1: recItem.genre1,
@@ -1613,6 +1726,9 @@
       }
 
       if (aribManager) {
+        state.bmlStreamSeq++;
+        state.bmlAvailNotifiedKey = '';
+        hideBmlAvailBadge();
         if (useProxy && !isBs4kSvc) {
           aribManager.startStreamSession({ isLive: true, serviceId: svc.serviceId });
         } else {
@@ -2000,7 +2116,12 @@
       if (srcInfo.isRawTs) {
         source.src = useTsProxy ? srcInfo.url : srcInfo.directUrl;
         var mediaOpt = {
-          mediaTransportType: 'URI'
+          mediaTransportType: 'URI',
+          option: {
+            transmission: {
+              useSeekableRanges: false
+            }
+          }
         };
         source.type = 'video/mp4; mediaOption=' + escape(JSON.stringify(mediaOpt));
       } else {
@@ -2053,6 +2174,9 @@
       }
 
       if (aribManager) {
+        state.bmlStreamSeq++;
+        state.bmlAvailNotifiedKey = '';
+        hideBmlAvailBadge();
         if (srcInfo.isRawTs && useTsProxy && !srcInfo.isBs4k) {
           aribManager.startStreamSession({ isLive: false, serviceId: recItem.serviceId || 0 });
         } else {
@@ -3346,11 +3470,13 @@
       { label: '閉じる' }
     ];
 
+    var recQrUrl = resolveSavedMediaQrUrl(rec);
     openModal(
       subParts.join('  |  '),
       rec.name || '録画番組',
       rec.description || '番組詳細情報はありません。',
-      btns
+      btns,
+      recQrUrl ? { qrUrl: recQrUrl } : null
     );
   }
 
@@ -4777,10 +4903,22 @@
           var sArr = (itemsData && itemsData.items) ? itemsData.items : [];
           for (var k = 0; k < sArr.length; k++) {
             var it = sArr[k];
+            if (it && it.id) {
+              state.mediaItemSourceMap[it.id] = {
+                sourceUrl: it.sourceUrl || '',
+                provider: it.provider || '',
+                episodeId: it.episodeId || '',
+                fileName: it.fileName || ''
+              };
+            }
             merged.push({
               isMediaServerItem: true,
               mediaItemId: it.id,
               directVideoUrl: saveSrvBase + '/api/video/' + encodeURIComponent(it.id),
+              provider: it.provider || '',
+              episodeId: it.episodeId || '',
+              sourceUrl: it.sourceUrl || '',
+              fileName: it.fileName || '',
               id: 'ms_' + it.id,
               name: it.title || it.fileName,
               channelName: (it.provider === 'TVER' && it.broadcaster && it.broadcaster !== 'その他')
@@ -5353,7 +5491,8 @@
       }
       jbBtns.push({ label: '最新状態に更新', onClick: function () { refreshRecordedOverlayData(); } });
       jbBtns.push({ label: '閉じる' });
-      openModal('配信ダウンロード状況', jb.title || jb.url, item.description || '', jbBtns);
+      var jbQr = (jb.url && typeof jb.url === 'string' && jb.url.indexOf('http') === 0) ? { qrUrl: jb.url } : null;
+      openModal('配信ダウンロード状況', jb.title || jb.url, item.description || '', jbBtns, jbQr);
       return;
     }
 
@@ -5384,7 +5523,8 @@
         '  /  長さ: ' + (item.durationSec > 0 ? formatSec(item.durationSec) : '--:--') +
         (item.sizeLabel ? ('  /  容量: ' + item.sizeLabel) : '') + '\n\n' +
         (item.description || '');
-      openModal('配信保存済み動画', item.name, msDetail, msBtns);
+      var msQrUrl = resolveSavedMediaQrUrl(item);
+      openModal('配信保存済み動画', item.name, msDetail, msBtns, msQrUrl ? { qrUrl: msQrUrl } : null);
       return;
     }
 
@@ -5425,7 +5565,7 @@
         }
       });
       qBtns.push({ label: '閉じる' });
-      openModal(qi.kind + ' 配信保存リスト', qi.title, item.description || '', qBtns);
+      openModal(qi.kind + ' 配信保存リスト', qi.title, item.description || '', qBtns, qi.targetUrl ? { qrUrl: qi.targetUrl } : null);
       return;
     }
 
@@ -7224,9 +7364,15 @@
     state.settings = merged;
     saveSettings();
 
-    // 実況・UI・接続先を即時反映
+    // 実況・字幕・UI・接続先を即時反映
+    jikkyo.setEnabled(state.settings.jikkyoEnabled);
     jikkyo.setFontSizeKey(state.settings.jikkyoFontSize);
     jikkyo.setOpacity(state.settings.jikkyoOpacity);
+    updateRedLabel();
+    if (aribManager) {
+      aribManager.setCaptionEnabled(!!state.settings.captionEnabled, false);
+      aribManager.setBmlPrefetchEnabled(state.settings.bmlPrefetchEnabled !== false);
+    }
     syncRecordingModeUi();
     renderNavTabs();
 
@@ -8022,10 +8168,54 @@
     gRec.appendChild(recRow);
     dom.drawerBody.appendChild(gRec);
 
-    // 5. 純正LiveTVオーバーレイ起動 & その他表示設定
+    // 5. 字幕・データ放送 (BML)・純正TV連携・詳細オプション
     var gSys = document.createElement('div');
     gSys.className = 'setting-group';
-    gSys.innerHTML = '<div class="setting-label">5. 純正TVアプリ連携・詳細オプション</div>';
+    var isBmlPrefetchOn = state.settings.bmlPrefetchEnabled !== false;
+    gSys.innerHTML =
+      '<div class="setting-label">5. 字幕・データ放送 (BML)・純正TV連携・詳細オプション</div>' +
+      '<div class="setting-desc">' +
+      '・字幕表示 (ARIB): 地デジ/BS/CS 放送および TS 録画の字幕・文字スーパーを表示します。<br>' +
+      '・データ放送 事前読み込み (バッファ): ON 時は選局直後に裏でファイルを先読みし（完了後は負荷0%）、[d] 起動を高速化します（特に BS で有効）。OFF 時は選局時の先読み負荷を完全に無くし、[d] 押下時のみ読み込みます。<br>' +
+      '・純正LiveTV連携: LG TV 純正チューナー画面の上にニコニコ実況コメントだけを重ねて表示します（TV実機向け）。<br>' +
+      '・サブCH表示: マルチ編成のサブチャンネル（012 / 102 等）を一覧に表示します。<br>' +
+      '・起動時ラストCH自動再生: アプリ起動時に前回見ていたチャンネルを自動で再生します。' +
+      '</div>';
+
+    var aribRow = document.createElement('div');
+    aribRow.className = 'preset-row';
+
+    var capSettingBtn = document.createElement('button');
+    var capIsOn = !!state.settings.captionEnabled;
+    capSettingBtn.className = 'btn-action' + (capIsOn ? ' active-toggle' : '');
+    capSettingBtn.textContent = '字幕表示 (ARIB): ' + (capIsOn ? 'ON' : 'OFF');
+    registerFocusable(capSettingBtn, function () {
+      toggleSubtitleMode();
+    });
+
+    var bmlPrefetchBtn = document.createElement('button');
+    bmlPrefetchBtn.className = 'btn-action' + (isBmlPrefetchOn ? ' active-toggle' : '');
+    bmlPrefetchBtn.textContent = 'データ放送 事前読み込み (バッファ): ' + (isBmlPrefetchOn ? 'ON (高速表示)' : 'OFF (省負荷)');
+    registerFocusable(bmlPrefetchBtn, function () {
+      var nextPref = !(state.settings.bmlPrefetchEnabled !== false);
+      state.settings.bmlPrefetchEnabled = nextPref;
+      saveSettings();
+      if (aribManager && typeof aribManager.setBmlPrefetchEnabled === 'function') {
+        aribManager.setBmlPrefetchEnabled(nextPref);
+      }
+      showRichToast(
+        'info',
+        'データ放送 事前読み込み: ' + (nextPref ? 'ON' : 'OFF'),
+        nextPref
+          ? '選局直後に裏でデータ放送ファイルを先読みします（特にBSの起動が高速化・完了後は負荷0%）'
+          : '選局時のデータ放送バックグラウンド読み込みを停止しました（[d]押下時のみ読み込みます）',
+        4500
+      );
+      renderCurrentTab();
+    });
+
+    aribRow.appendChild(capSettingBtn);
+    aribRow.appendChild(bmlPrefetchBtn);
 
     var sysRow = document.createElement('div');
     sysRow.className = 'preset-row';
@@ -8060,18 +8250,10 @@
       renderCurrentTab();
     });
 
-    var capSettingBtn = document.createElement('button');
-    var capIsOn = !!state.settings.captionEnabled;
-    capSettingBtn.className = 'btn-action' + (capIsOn ? ' active-toggle' : '');
-    capSettingBtn.textContent = '字幕表示 (ARIB): ' + (capIsOn ? 'ON' : 'OFF');
-    registerFocusable(capSettingBtn, function () {
-      toggleSubtitleMode();
-    });
-
-    sysRow.appendChild(capSettingBtn);
     sysRow.appendChild(ovBtn);
     sysRow.appendChild(subBtn);
     sysRow.appendChild(autoBtn);
+    gSys.appendChild(aribRow);
     gSys.appendChild(sysRow);
     dom.drawerBody.appendChild(gSys);
   }
@@ -9202,9 +9384,12 @@
       return;
     }
 
-    // 3b. データ放送 (BML) 表示中はホイールで誤選局しない
+    // 3b. データ放送 (BML) 表示中はホイールで上下移動 (誤選局防止 & マジックリモコン/マウス対応)
     if (aribManager && aribManager.getStatus().bmlActive) {
       ev.preventDefault();
+      if (now - state.lastWheelTime < 130) return;
+      state.lastWheelTime = now;
+      aribManager.handleKeyDown(dir < 0 ? 38 : 40);
       return;
     }
 
@@ -9432,16 +9617,36 @@
   var btnBmlRed = document.getElementById('btn-bml-red');
   var btnBmlGreen = document.getElementById('btn-bml-green');
   var btnBmlYellow = document.getElementById('btn-bml-yellow');
+  var btnBmlLeft = document.getElementById('btn-bml-left');
+  var btnBmlUp = document.getElementById('btn-bml-up');
+  var btnBmlDown = document.getElementById('btn-bml-down');
+  var btnBmlRight = document.getElementById('btn-bml-right');
+  var btnBmlOk = document.getElementById('btn-bml-ok');
   var btnBmlSub = document.getElementById('btn-bml-sub');
   var btnBmlBack = document.getElementById('btn-bml-back');
   var btnBmlClose = document.getElementById('btn-bml-close');
-  if (btnBmlBlue) btnBmlBlue.onclick = function () { if (aribManager) aribManager.handleKeyDown(406); };
-  if (btnBmlRed) btnBmlRed.onclick = function () { if (aribManager) aribManager.handleKeyDown(403); };
-  if (btnBmlGreen) btnBmlGreen.onclick = function () { if (aribManager) aribManager.handleKeyDown(404); };
-  if (btnBmlYellow) btnBmlYellow.onclick = function () { if (aribManager) aribManager.handleKeyDown(405); };
-  if (btnBmlSub) btnBmlSub.onclick = toggleSubtitleMode;
-  if (btnBmlBack) btnBmlBack.onclick = function () { if (aribManager) aribManager.handleKeyDown(461); };
-  if (btnBmlClose) btnBmlClose.onclick = function () { if (aribManager) aribManager.closeBml(false); };
+  if (btnBmlBlue) btnBmlBlue.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(406); };
+  if (btnBmlRed) btnBmlRed.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(403); };
+  if (btnBmlGreen) btnBmlGreen.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(404); };
+  if (btnBmlYellow) btnBmlYellow.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(405); };
+  if (btnBmlLeft) btnBmlLeft.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(37); };
+  if (btnBmlUp) btnBmlUp.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(38); };
+  if (btnBmlDown) btnBmlDown.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(40); };
+  if (btnBmlRight) btnBmlRight.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(39); };
+  if (btnBmlOk) btnBmlOk.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(13); };
+  var bmlDigitBtns = document.querySelectorAll('#bml-num-group [data-bml-digit]');
+  for (var bdi = 0; bdi < bmlDigitBtns.length; bdi++) {
+    (function (el) {
+      var dVal = parseInt(el.getAttribute('data-bml-digit'), 10);
+      el.onclick = function (e) {
+        if (e) e.stopPropagation();
+        if (aribManager && !isNaN(dVal)) aribManager.handleKeyDown(48 + dVal);
+      };
+    })(bmlDigitBtns[bdi]);
+  }
+  if (btnBmlSub) btnBmlSub.onclick = function (e) { if (e) e.stopPropagation(); toggleSubtitleMode(); };
+  if (btnBmlBack) btnBmlBack.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.handleKeyDown(461); };
+  if (btnBmlClose) btnBmlClose.onclick = function (e) { if (e) e.stopPropagation(); if (aribManager) aribManager.closeBml(false); };
 
   // =========================================================================
   // 起動シーケンス (KeyMask 解放 & 常駐デーモン起動後に Mirakurun / EPGStation 読込)
