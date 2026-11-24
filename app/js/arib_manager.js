@@ -28,6 +28,7 @@
     var onStateChange = opts.onStateChange || function () {};
     var onTuneRequest = opts.onTuneRequest || function () { return false; };
     var onUserInteract = opts.onUserInteract || function () {};
+    var onAudioPmtChange = opts.onAudioPmtChange || function () {};
 
     var vendor = global.DTVAribVendor || null;
 
@@ -86,7 +87,8 @@
       cachedPcr: null,
       cachedModuleLists: {}, // componentId -> msg
       cachedModules: {},     // componentId + '_' + moduleId -> msg
-      cachedEsEvents: {}     // componentId -> msg
+      cachedEsEvents: {},    // componentId -> msg
+      lastAudioPmtSig: ''    // 直近 PMT の音声 ES 構成署名 (番組境界検知用)
     };
 
     var tsDecoder = null;
@@ -965,6 +967,7 @@
       state.cachedModuleLists = {};
       state.cachedModules = {};
       state.cachedEsEvents = {};
+      state.lastAudioPmtSig = '';
     }
 
     /**
@@ -1190,13 +1193,47 @@
       if (!msg || !msg.type) return false;
       if (msg.type === 'pmt') {
         state.cachedPmt = msg;
+        var allComps = msg.components || [];
+        // 音声 ES (AAC=0x0F, MPEG Audio=0x03/0x04) の構成変化を検出し、番組境界の無音化防止コールバックを通知する
+        var audioComps = [];
+        for (var ai = 0; ai < allComps.length; ai++) {
+          var ac = allComps[ai];
+          if (ac && (ac.streamType === 0x0F || ac.streamType === 0x03 || ac.streamType === 0x04)) {
+            audioComps.push({
+              pid: Number(ac.pid || 0),
+              streamType: Number(ac.streamType || 0),
+              componentId: (ac.componentId !== undefined && ac.componentId !== null) ? Number(ac.componentId) : -1
+            });
+          }
+        }
+        audioComps.sort(function (a, b) {
+          if (a.pid !== b.pid) return a.pid - b.pid;
+          return a.componentId - b.componentId;
+        });
+        var sigParts = [];
+        for (var si = 0; si < audioComps.length; si++) {
+          sigParts.push(audioComps[si].streamType + ':' + audioComps[si].pid + ':' + audioComps[si].componentId);
+        }
+        var audioSig = sigParts.join(',');
+        if (audioSig && audioSig !== state.lastAudioPmtSig) {
+          var prevAudioSig = state.lastAudioPmtSig;
+          state.lastAudioPmtSig = audioSig;
+          try {
+            onAudioPmtChange({
+              signature: audioSig,
+              isInitial: (prevAudioSig === ''),
+              count: audioComps.length,
+              components: audioComps
+            });
+          } catch (eAudCb) {}
+        }
+
         var prevHasBml = state.bmlHasDataComponent;
         var hasBml = false;
         // 録画再生時 (!isLiveStream) はデータ放送 (BML) を無効化し、ARIB 字幕・文字スーパーのみを有効にする
         if (state.isLiveStream) {
-          var comps = msg.components || [];
-          for (var i = 0; i < comps.length; i++) {
-            if (comps[i].streamType === 0x0D || comps[i].bxmlInfo) {
+          for (var i = 0; i < allComps.length; i++) {
+            if (allComps[i].streamType === 0x0D || allComps[i].bxmlInfo) {
               hasBml = true;
               break;
             }

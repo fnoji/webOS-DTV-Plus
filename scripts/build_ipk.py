@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 外部CLI (ares-package) 不要で webOS 標準形式の .ipk パッケージを生成するスクリプト。
-
-- tv.dtvplus.webos_<version>_all.ipk          : メインアプリ (app/)
-- tv.dtvplus.webos.overlay_<version>_all.ipk  : 純正LiveTV用 ニコニコ実況透過オーバーレイ (overlay-app/)
-
-バージョンは各 appinfo.json の "version" から取得する。
+- tv.dtvplus.webos_0.3.0_all.ipk (メインアプリ)
+- tv.dtvplus.webos.overlay_0.3.0_all.ipk (純正LiveTV用 ニコニコ実況透過オーバーレイ)
 ※ pc/ フォルダはパッケージ対象外 (PC専用ファイルは .ipk に一切同梱しない)
 """
 import gzip
@@ -15,10 +12,6 @@ import os
 import shutil
 import tarfile
 import time
-
-# .ipk に同梱しないファイル/ディレクトリ
-EXCLUDE_DIRS = {"__pycache__", ".git"}
-EXCLUDE_FILES = {".DS_Store", "Thumbs.db"}
 
 
 def make_ar_entry(name, data, mtime):
@@ -79,9 +72,9 @@ def package_webos_app(app_dir, out_dir):
     prefix = "usr/palm/applications/%s" % app_id
 
     for root, dirnames, filenames in os.walk(app_dir):
-        dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
+        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
         for fn in filenames:
-            if fn in EXCLUDE_FILES or fn.endswith(".pyc"):
+            if fn.endswith((".pyc", ".pyo")):
                 continue
             full = os.path.join(root, fn)
             rel = os.path.relpath(full, app_dir).replace("\\", "/")
@@ -90,7 +83,8 @@ def package_webos_app(app_dir, out_dir):
             # テキストファイル内の CRLF を LF に統一 (TV上の Python/sh 実行互換性のため)
             if fn.endswith((".py", ".sh", ".js", ".css", ".html", ".json")):
                 content = content.replace(b"\r\n", b"\n")
-            mode = 0o755 if fn.endswith((".py", ".sh")) else 0o644
+            is_exec = fn.endswith((".py", ".sh")) or ("/bin/" in ("/" + rel))
+            mode = 0o755 if is_exec else 0o644
             data_files["%s/%s" % (prefix, rel)] = (content, mode)
             total_bytes += len(content)
 
@@ -130,13 +124,11 @@ def package_webos_app(app_dir, out_dir):
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
     # アイコン未生成なら生成する
     icon_check = os.path.join(root, "app", "icon80.png")
     if not os.path.exists(icon_check):
         import generate_icons
-
-        generate_icons.main()
+        generate_icons
 
     # overlay-app にも共通の jikkyo.js を同期コピー
     shutil.copyfile(

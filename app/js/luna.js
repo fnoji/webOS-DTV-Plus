@@ -138,6 +138,68 @@
   }
 
   /**
+   * LG純正 uMediaServer パイプライン情報 (sourceInfo / audioInfo 等) の購読を開始する
+   */
+  function subscribeMediaInfo(mediaId, onEvent) {
+    if (!mediaId) return null;
+    return callLuna(
+      'luna://com.webos.media/subscribe',
+      { mediaId: mediaId, subscribe: true },
+      function (res) { if (onEvent) onEvent(res); },
+      function () {}
+    );
+  }
+
+  /**
+   * uMediaServer パイプライン購読を解除する
+   */
+  function unsubscribeMediaInfo(mediaId, bridge) {
+    if (bridge) {
+      var idx = activeBridges.indexOf(bridge);
+      if (idx !== -1) activeBridges.splice(idx, 1);
+      try {
+        if (typeof bridge.cancel === 'function') bridge.cancel();
+      } catch (e) {}
+    }
+    if (mediaId) {
+      callLuna(
+        'luna://com.webos.media/unsubscribe',
+        { mediaId: mediaId },
+        function () {},
+        function () {}
+      );
+    }
+  }
+
+  /**
+   * 現在アクティブな DTV Plus 再生パイプラインの mediaId を取得する (dom.video.mediaId 補完用)
+   */
+  function resolveActiveMediaId(callback) {
+    callLuna(
+      'luna://com.webos.media/getActivePipelines',
+      {},
+      function (res) {
+        var found = '';
+        var list = Array.isArray(res) ? res : (res && Array.isArray(res.pipelines) ? res.pipelines : null);
+        if (list) {
+          for (var i = 0; i < list.length; i++) {
+            var p = list[i];
+            if (p && p.type === 'media' && p.id &&
+                (p.appId === 'tv.dtvplus.webos' || p.currentAppId === 'tv.dtvplus.webos' || p.is_foreground)) {
+              found = p.id;
+              break;
+            }
+          }
+        }
+        if (callback) callback(found);
+      },
+      function () {
+        if (callback) callback('');
+      }
+    );
+  }
+
+  /**
    * 純正 Live TV アプリを起動し、その上にニコニコ実況透過オーバーレイを重ねる
    */
   function launchNativeTvWithOverlay(jkId, prefs, callback) {
@@ -171,6 +233,9 @@
     pingHelper: pingHelper,
     setAudioDualMono: setAudioDualMono,
     selectAudioTrack: selectAudioTrack,
+    subscribeMediaInfo: subscribeMediaInfo,
+    unsubscribeMediaInfo: unsubscribeMediaInfo,
+    resolveActiveMediaId: resolveActiveMediaId,
     launchNativeTvWithOverlay: launchNativeTvWithOverlay
   };
 })(window);

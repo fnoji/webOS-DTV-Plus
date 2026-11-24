@@ -380,6 +380,18 @@
     osdScrubbing: false,
     osdScrubTargetSec: 0,
     audioModeIndex: 0,
+    activeMediaId: '',
+    mediaSubBridge: null,
+    mediaSubMediaId: '',
+    mediaNumAudioTracks: 0,
+    mediaAudioTracks: [],
+    mediaAudioSig: '',
+    mediaIsDualMono: null,
+    pmtAudioCount: 0,
+    pmtAudioSig: '',
+    audioSyncTimer: null,
+    audioFollowupTimer: null,
+    lastAudioSyncAt: 0,
     jikkyoStatusText: '--',
 
     tverViewMode: 'VOD',         // 'VOD' | 'LIVE'
@@ -541,6 +553,9 @@
         },
         onUserInteract: function () {
           wakeBottomGuide();
+        },
+        onAudioPmtChange: function (info) {
+          handleAribAudioPmtChange(info);
         },
         onTuneRequest: function (onid, _tsid, sid) {
           var list = state.services || [];
@@ -1550,8 +1565,35 @@
   // =========================================================================
   // 映像再生制御 (Mirakurun 生TS & yt-dlp 抽出による TVer / Abema 再生)
   // =========================================================================
+  function resetMediaAudioState() {
+    if (state.audioSyncTimer) {
+      clearTimeout(state.audioSyncTimer);
+      state.audioSyncTimer = null;
+    }
+    if (state.audioFollowupTimer) {
+      clearTimeout(state.audioFollowupTimer);
+      state.audioFollowupTimer = null;
+    }
+    if (state.mediaSubBridge || state.mediaSubMediaId) {
+      if (window.WebOSBridge && window.WebOSBridge.unsubscribeMediaInfo) {
+        window.WebOSBridge.unsubscribeMediaInfo(state.mediaSubMediaId, state.mediaSubBridge);
+      }
+    }
+    state.activeMediaId = '';
+    state.mediaSubBridge = null;
+    state.mediaSubMediaId = '';
+    state.mediaNumAudioTracks = 0;
+    state.mediaAudioTracks = [];
+    state.mediaAudioSig = '';
+    state.mediaIsDualMono = null;
+    state.pmtAudioCount = 0;
+    state.pmtAudioSig = '';
+    state.lastAudioSyncAt = 0;
+  }
+
   function resetVideoElement() {
     flushCurrentVodProgress();
+    resetMediaAudioState();
     if (window.DtvPlusPcPlayer && window.DtvPlusPcPlayer.destroy) {
       try { window.DtvPlusPcPlayer.destroy(); } catch (e0) {}
     }
@@ -1699,9 +1741,18 @@
         }
         dom.standby.className = 'hidden';
       }
-      dom.video.onloadeddata = hideStandby;
+      dom.video.onloadedmetadata = function () {
+        ensureMediaAudioSubscription();
+      };
+      dom.video.onloadeddata = function () {
+        hideStandby();
+        ensureMediaAudioSubscription();
+      };
       dom.video.oncanplay = hideStandby;
-      dom.video.onplaying = hideStandby;
+      dom.video.onplaying = function () {
+        hideStandby();
+        ensureMediaAudioSubscription();
+      };
 
       // Mirakurun は B-CAS 未契約チャンネルでも HTTP 200 のまま復号不能パケットを流し続けるため、
       // EIT の isFree フラグとデコード開始タイムアウトを組み合わせて未契約ブロックを通知する
@@ -2159,14 +2210,19 @@
           } catch (e) {}
         }
       }
-      dom.video.onloadedmetadata = applyMp4Seek;
+      dom.video.onloadedmetadata = function () {
+        applyMp4Seek();
+        ensureMediaAudioSubscription();
+      };
       dom.video.onloadeddata = function () {
         dom.standby.className = 'hidden';
         applyMp4Seek();
+        ensureMediaAudioSubscription();
       };
       dom.video.onplaying = function () {
         dom.standby.className = 'hidden';
         applyMp4Seek();
+        ensureMediaAudioSubscription();
       };
 
       if (window.DtvPlusPcPlayer && window.DtvPlusPcPlayer.attachRecorded) {
@@ -3626,7 +3682,7 @@
   }
 
   // =========================================================================
-  // 音声切替 & 実況切替
+  // 音声切替 & 実況切替 (LG純正 uMediaServer sourceInfo / audioInfo 自動追従対応)
   // =========================================================================
   var AUDIO_MODES = [
     { label: '主音声', dualMonoCode: 1, trackIdx: 0 },
@@ -3640,20 +3696,210 @@
     dom.labelGreen.textContent = text;
   }
 
+  /**
+   * 現在の音声トラック数・Dual Mono状態・ユーザー選択に基づき、
+   * GStreamer / ハードウェア音声DSP (ADEC) へ安全にトラックとデュアルモノ設定を再同期する
+   */
+  function syncMediaAudioConfig(forceTrackRebind, _reason) {
+    if (window.DtvPlusPcPlayer) return;
+
+    var mode = AUDIO_MODES[state.audioModeIndex] || AUDIO_MODES[0];
+    var mediaId = (dom.video && dom.video.mediaId) || state.activeMediaId || '';
+    if (!mediaId) {
+      if (window.WebOSBridge && window.WebOSBridge.resolveActiveMediaId) {
+        window.WebOSBridge.resolveActiveMediaId(function (resolvedId) {
+          if (resolvedId) {
+            state.activeMediaId = resolvedId;
+            ensureMediaAudioSubscription(resolvedId);
+            syncMediaAudioConfig(forceTrackRebind, _reason);
+          }
+        });
+      }
+      return;
+    }
+    state.activeMediaId = mediaId;
+
+    var domTracks = (dom.video && dom.video.audioTracks) ? dom.video.audioTracks : null;
+    var domLen = domTracks ? domTracks.length : 0;
+    var availTracks = state.mediaNumAudioTracks || domLen || state.pmtAudioCount || 1;
+    var targetTrackIdx = (availTracks >= 2 && mode.trackIdx >= 1) ? 1 : 0;
+    if (targetTrackIdx >= availTracks) targetTrackIdx = 0;
+
+    // LG純正 photovideo (isDualMonoChanged) 準拠:
+    // Dual Mono 時は選択中モードを適用し、通常ステレオ等への切替時は audioMode=1 (UI標準 Main) で強制設定を解除する。
+    // なお mediaIsDualMono 未取得かつ 1トラックのみの時に副音声/主+副が選ばれている場合のみ mode.dualMonoCode を送る。
+    var targetDualCode;
+    if (state.mediaIsDualMono === true) {
+      targetDualCode = mode.dualMonoCode;
+    } else if (state.mediaIsDualMono === false) {
+      targetDualCode = 1;
+    } else {
+      targetDualCode = (availTracks <= 1) ? mode.dualMonoCode : 1;
+    }
+
+    state.lastAudioSyncAt = Date.now();
+    window.WebOSBridge.setAudioDualMono(mediaId, targetDualCode, function () {});
+
+    if (domTracks && domTracks.length > 1) {
+      for (var i = 0; i < domTracks.length; i++) {
+        try {
+          domTracks[i].enabled = (i === targetTrackIdx);
+        } catch (eTr) {}
+      }
+    }
+    if (forceTrackRebind || (domTracks && domTracks.length >= 2) || availTracks >= 2) {
+      window.WebOSBridge.selectAudioTrack(mediaId, targetTrackIdx, function () {});
+    }
+  }
+
+  function scheduleMediaAudioSync(reason, forceTrackRebind, delayMs) {
+    if (window.DtvPlusPcPlayer) return;
+    if (state.audioSyncTimer) {
+      clearTimeout(state.audioSyncTimer);
+      state.audioSyncTimer = null;
+    }
+    state.audioSyncTimer = setTimeout(function () {
+      state.audioSyncTimer = null;
+      syncMediaAudioConfig(!!forceTrackRebind, reason);
+    }, typeof delayMs === 'number' ? delayMs : 60);
+  }
+
+  function handleUmsSourceInfo(info, mediaId) {
+    if (!info) return;
+    if (mediaId) state.activeMediaId = mediaId;
+    var prog = (info.programInfo && info.programInfo[0]) ? info.programInfo[0] : info;
+    var tracks = (prog && Array.isArray(prog.audioTrackInfo)) ? prog.audioTrackInfo : null;
+    var numTracks = (prog && typeof prog.numAudioTracks === 'number')
+      ? prog.numAudioTracks
+      : (tracks ? tracks.length : 0);
+
+    var parts = [];
+    if (tracks) {
+      for (var i = 0; i < tracks.length; i++) {
+        var tr = tracks[i] || {};
+        parts.push([
+          tr.trackId !== undefined ? tr.trackId : i,
+          tr.pid !== undefined ? tr.pid : '',
+          tr.ctag !== undefined ? tr.ctag : '',
+          tr.codec || '',
+          tr.channels || '',
+          tr.language || ''
+        ].join(':'));
+      }
+    }
+    var newSig = numTracks + '|' + parts.join(',');
+    var prevSig = state.mediaAudioSig;
+    state.mediaNumAudioTracks = numTracks;
+    state.mediaAudioTracks = tracks || [];
+    state.mediaAudioSig = newSig;
+
+    var changedMidStream = !!(prevSig && prevSig !== newSig);
+    if (changedMidStream || state.audioModeIndex !== 0) {
+      scheduleMediaAudioSync('sourceInfo', true, 60);
+    }
+  }
+
+  function handleUmsAudioInfo(info, mediaId) {
+    if (!info) return;
+    if (mediaId) state.activeMediaId = mediaId;
+    if (typeof info.dualMono !== 'boolean') return;
+    var nextDual = info.dualMono;
+    var prevDual = state.mediaIsDualMono;
+    state.mediaIsDualMono = nextDual;
+
+    // LG純正 photovideo と同じく dualMono の有無が切り替わった瞬間に DSP 出力モードを確実に同期する
+    if ((prevDual !== null && prevDual !== nextDual) || nextDual === true || state.audioModeIndex !== 0) {
+      scheduleMediaAudioSync('audioInfo', prevDual !== null && prevDual !== nextDual, 60);
+    }
+  }
+
+  function dispatchUmsMediaPayload(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    var mid = payload.mediaId || state.activeMediaId || '';
+    if (mid && !state.activeMediaId) {
+      state.activeMediaId = mid;
+    }
+    if (payload.type === 'sourceInfo' && payload.info) {
+      handleUmsSourceInfo(payload.info, mid);
+    } else if (payload.sourceInfo) {
+      handleUmsSourceInfo(payload.sourceInfo, payload.sourceInfo.mediaId || mid);
+    }
+    if (payload.type === 'audioInfo' && payload.info) {
+      handleUmsAudioInfo(payload.info, mid);
+    } else if (payload.audioInfo) {
+      handleUmsAudioInfo(payload.audioInfo, payload.audioInfo.mediaId || mid);
+    }
+  }
+
+  function handleAribAudioPmtChange(info) {
+    if (window.DtvPlusPcPlayer || !info) return;
+    if (state.mode !== 'LIVE' && state.mode !== 'RECORDED') return;
+    var prevCount = state.pmtAudioCount;
+    var prevSig = state.pmtAudioSig;
+    state.pmtAudioCount = info.count || 0;
+    state.pmtAudioSig = info.signature || '';
+
+    // 視聴途中で PMT の音声 ES 構成が変化したときのバックアップ検知
+    if (!info.isInitial && prevSig && prevSig !== state.pmtAudioSig) {
+      scheduleMediaAudioSync('pmt', true, 120);
+      // 映像/音声デコーダバッファ分の遅延後に uMediaServer 通知が来ていなければ追い同期する
+      if (state.audioFollowupTimer) {
+        clearTimeout(state.audioFollowupTimer);
+      }
+      state.audioFollowupTimer = setTimeout(function () {
+        state.audioFollowupTimer = null;
+        if ((Date.now() - (state.lastAudioSyncAt || 0)) > 600 || prevCount !== state.pmtAudioCount) {
+          syncMediaAudioConfig(true, 'pmt-followup');
+        }
+      }, 950);
+    }
+  }
+
+  function ensureMediaAudioSubscription(explicitMediaId) {
+    if (window.DtvPlusPcPlayer) return;
+    var mid = explicitMediaId || (dom.video && dom.video.mediaId) || state.activeMediaId || '';
+    if (!mid) {
+      if (window.WebOSBridge && window.WebOSBridge.resolveActiveMediaId) {
+        window.WebOSBridge.resolveActiveMediaId(function (resolvedId) {
+          if (resolvedId) ensureMediaAudioSubscription(resolvedId);
+        });
+      }
+      return;
+    }
+    state.activeMediaId = mid;
+    if (state.mediaSubMediaId === mid && state.mediaSubBridge) {
+      return;
+    }
+    if (state.mediaSubBridge || state.mediaSubMediaId) {
+      if (window.WebOSBridge && window.WebOSBridge.unsubscribeMediaInfo) {
+        window.WebOSBridge.unsubscribeMediaInfo(state.mediaSubMediaId, state.mediaSubBridge);
+      }
+    }
+    state.mediaSubMediaId = mid;
+    if (window.WebOSBridge && window.WebOSBridge.subscribeMediaInfo) {
+      state.mediaSubBridge = window.WebOSBridge.subscribeMediaInfo(mid, function (res) {
+        dispatchUmsMediaPayload(res);
+      });
+    }
+  }
+
+  if (typeof document !== 'undefined' && document.addEventListener && !window.DtvPlusPcPlayer) {
+    document.addEventListener('umsmediainfo', function (ev) {
+      if (!ev || !ev.detail) return;
+      var parsed = ev.detail;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch (e) { return; }
+      }
+      dispatchUmsMediaPayload(parsed);
+    }, true);
+  }
+
   function cycleAudioMode() {
     state.audioModeIndex = (state.audioModeIndex + 1) % AUDIO_MODES.length;
     var target = AUDIO_MODES[state.audioModeIndex];
     updateAudioBadgeLabel();
 
-    var mediaId = dom.video.mediaId || '';
-    window.WebOSBridge.setAudioDualMono(mediaId, target.dualMonoCode, function () {});
-    if (dom.video.audioTracks && dom.video.audioTracks.length > 1) {
-      for (var i = 0; i < dom.video.audioTracks.length; i++) {
-        dom.video.audioTracks[i].enabled = (i === target.trackIdx);
-      }
-    } else if (mediaId) {
-      window.WebOSBridge.selectAudioTrack(mediaId, target.trackIdx, function () {});
-    }
+    syncMediaAudioConfig(true, 'user');
     showRichToast('info', '音声モード切替', target.label + ' に切り替えました');
     showOsdBanner();
   }

@@ -39,6 +39,7 @@ LGTV webOS 4での動作表示
 - **NX-jikkyo** 経由でニコニコ実況に対応しています（実装は [KonomiTV](https://github.com/tsukumijima/KonomiTV) を参考にしています）。
 - LG 純正 TV アプリ準拠の **3 桁選局番号**・ワンタッチ選局（shortCut 1〜12）に対応し、LG 純正の局ロゴ（`/mnt/lg/user/jlogo`）も補完表示します。
 - **2 次元ラテ欄 EPG**（横軸＝放送局 / 縦軸＝時間帯）と番組詳細モーダルを搭載しています。
+- **番組境界での音声切替・無音化対策**: 同梱の `tsreadex` による音声ストリーム正規化（2 トラック固定化・Dual Mono 分離）と、LG 純正仕様準拠の `uMediaServer` 音声イベント監視・自動再同期により、二ヶ国語放送やマルチ音声番組から通常ステレオ番組への切り替わり時でも音声が途切れず再生を継続します。緑ボタンから主音声 / 副音声 / 主＋副の切り替えが可能です。
 
 ### BS4K
 
@@ -119,7 +120,7 @@ PC WebUIでの表示
 
 | 項目 | 内容 |
 |---|---|
-| 対応 TV | LG webOS 4.x 以降（開発・検証機: `55UK7500PJA` / webOS 4.x） |
+| 対応 TV | LG webOS 4.x（開発・検証機: `55UK7500PJA` / `55UK6300PJF`・webOS 4.4.3、webOS 5.x 以降は未検証） |
 | 描画エンジン | Chromium 53（Blink 53）/ ES5 前提 |
 | 必須 | [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)（開発者モード + root 化） |
 | 放送波視聴 | Mirakurun サーバー（コピーフリー環境） |
@@ -229,6 +230,7 @@ app/                 TV アプリ本体（IPK の中身）
     start_daemon.sh  chroot 構築 + デーモン起動
     autostart_init.sh  TV 起動時の自動起動
     mmt2ts.c / bin/mmt2ts-armv7  BS4K MMT/TLV → MPEG-2 TS リマキサー
+    bin/tsreadex-armv7           ARIB TS 音声正規化バイナリ（xtne6f/tsreadex ARMv7 静的ビルド）
 overlay-app/         純正 LiveTV 用 透過オーバーレイ（別アプリ ID）
 pc/                  PC 版（WebUI サーバー / アダプタ / 配信保存サーバー）
 scripts/             ビルド・デプロイ・検証スクリプト
@@ -244,13 +246,15 @@ TV 内の常駐デーモン（`http://127.0.0.1:7019`）が担当します。
 - chroot 環境: `/mnt/lg/cmn_data/ytdlp-env`（Alpine armv7 + Python 3.12 + 公式 `yt-dlp`）
 - 自動起動: `/var/lib/webosbrew/init.d/91-dtvplus`
 - `yt-dlp` の自己更新: 設定タブの「`yt-dlp` を最新版へ更新」ボタン（更新後は自動で再起動）
-- `tsreadex` が `/usr/local/bin/tsreadex` に存在する場合は TS 正規化に使用し、無い場合は素通しで動作します（必須ではありません）
+- TS 正規化: 同梱の `tsreadex-armv7` を `start_daemon.sh` で chroot 内 `/usr/local/bin/tsreadex` へ自動配置し、地デジ / BS / CS のライブおよび生 TS 録画再生時に音声ストリームを常時 2 トラック固定へ正規化します（ARIB 字幕・BML は前段のサイドバンドで生 TS から抽出するため影響しません）
 
 ---
 
 ## 既知の制約
 
 - **webOS 4 = Chromium 53** の制約により、JS は ES5、CSS は Blink 53 の範囲で実装されています。
+- **webOS 5.x 以降（webOS 5 / 6 / 22〜24）は実機未検証**です。webOS 5 以降では Luna Bus（`com.webos.media`）のアクセス制御（ACG）厳格化や `video.audioTracks` との挙動差により一部動作が異なる可能性があります。
+- **PC WebUI 版の音声出力**: PC 版（`pc_server.py`）は `ffmpeg` で第 1 音声を 48kHz / 2ch ステレオ AAC 固定へ再エンコードして配信するため番組境界での無音化は起きませんが、現時点では PC 版での主音声／副音声切替には未対応です。
 - **TVer はニコニコ実況の対象外**です（ABEMA ライブは独自コメントを実況風に表示します）。
 - **ABEMA のコメント取得は試験的**な実装です。API 仕様変更時はコメントが空になるだけで、再生には影響しません。
 - EPGStation の番組表 API は使用していません。番組表は Mirakurun の番組情報から構築し、ABEMA のみ配信保存サーバーのキャッシュを使用します。
@@ -277,3 +281,4 @@ TV 内の常駐デーモン（`http://127.0.0.1:7019`）が担当します。
 
 同梱しているフォント（Kosugi / Kosugi Maru）は [Apache License 2.0](app/fonts/LICENSE.txt) に従います。
 `app/js/arib_bundle.js` は aribb24.js（MIT）・web-bml・es2 をバンドルしたものです。各ライブラリのライセンスに従います。
+`app/backend/bin/tsreadex-armv7` は [xtne6f/tsreadex](https://github.com/xtne6f/tsreadex)（MIT License）を ARMv7 向けに静的ビルドして同梱したものです。
